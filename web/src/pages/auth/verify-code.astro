@@ -1,0 +1,17 @@
+---
+import AuthLayout from "../../layouts/AuthLayout.astro";
+import VerifyCodeForm from "../../components/auth/VerifyCodeForm";
+
+const email = Astro.url.searchParams.get("email") ?? "";
+---
+
+<AuthLayout
+  title="Verify Code"
+  step={3}
+  panelQuote="Masukkan kode verifikasi yang dikirim ke email kamu."
+  panelAuthor="Security"
+  panelRole="Verification"
+  image="/auth/panel-4.svg"
+>
+  <VerifyCodeForm client:only="react" email={email} />
+</AuthLayout>

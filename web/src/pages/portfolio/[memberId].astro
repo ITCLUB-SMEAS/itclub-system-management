@@ -1,0 +1,148 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { fetchMemberPortfolio, fetchShowcase } from "../../lib/public-api";
+
+export async function getStaticPaths() {
+  try {
+    const showcase = await fetchShowcase();
+    return showcase.members.map((m) => ({
+      params: { memberId: m.id },
+    }));
+  } catch {
+    return [];
+  }
+}
+
+const { memberId } = Astro.params;
+let member: Awaited<ReturnType<typeof fetchMemberPortfolio>> | null = null;
+let loadError = "";
+if (memberId) {
+  try {
+    member = await fetchMemberPortfolio(memberId);
+  } catch {
+    loadError = "Portfolio tidak ditemukan atau API offline.";
+  }
+}
+---
+
+<BaseLayout title={member ? `${member.fullName} · Portfolio` : "Portfolio"}>
+  <div class="min-h-screen bg-brand-50">
+    <header class="border-b border-brand-100 bg-white">
+      <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
+        <a href="/portfolio" class="text-sm font-medium text-brand-700 hover:underline">
+          ← Showcase
+        </a>
+        <a href="/auth/sign-in" class="text-sm text-slate-500 hover:text-brand-600">
+          Login
+        </a>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-3xl px-4 py-10">
+      {loadError && (
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {loadError}
+        </div>
+      )}
+
+      {member && (
+        <>
+          <section class="mb-8 rounded-3xl border border-brand-100 bg-white p-8 shadow-sm">
+            <div class="flex flex-wrap items-start gap-4">
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-100 text-xl font-bold text-brand-700">
+                {member.fullName.slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <h1 class="text-2xl font-semibold text-slate-900">{member.fullName}</h1>
+                <p class="text-sm text-slate-500">
+                  {member.className ?? "—"}
+                  {member.batchYear ? ` · ${member.batchYear}` : ""}
+                </p>
+                {member.interests?.length > 0 && (
+                  <div class="mt-3 flex flex-wrap gap-1.5">
+                    {member.interests.map((i) => (
+                      <span class="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+                        {i}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section class="mb-8">
+            <h2 class="mb-3 text-lg font-semibold text-slate-900">Project / Submission</h2>
+            <ul class="space-y-3">
+              {member.submissions.map((s) => (
+                <li class="rounded-2xl border border-brand-100 bg-white px-4 py-3 shadow-sm">
+                  <p class="font-medium text-slate-900">
+                    {s.task?.title ?? "Submission"}
+                  </p>
+                  <p class="text-xs text-slate-400">
+                    {s.task?.project?.name ?? "—"}
+                  </p>
+                  <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                    {s.repoUrl && (
+                      <a href={s.repoUrl} target="_blank" rel="noreferrer" class="text-brand-600 hover:underline">
+                        Repo
+                      </a>
+                    )}
+                    {s.demoUrl && (
+                      <a href={s.demoUrl} target="_blank" rel="noreferrer" class="text-brand-600 hover:underline">
+                        Demo
+                      </a>
+                    )}
+                  </div>
+                </li>
+              ))}
+              {!member.submissions.length && (
+                <li class="text-sm text-slate-400">Belum ada submission</li>
+              )}
+            </ul>
+          </section>
+
+          <section class="mb-8 grid gap-6 sm:grid-cols-2">
+            <div>
+              <h2 class="mb-3 text-lg font-semibold text-slate-900">Prestasi</h2>
+              <ul class="space-y-2">
+                {member.achievements.map((a) => (
+                  <li class="rounded-xl border border-brand-100 bg-white px-3 py-2 text-sm">
+                    <p class="font-medium">{a.title}</p>
+                    <p class="text-xs text-slate-400">{a.rank ?? "—"}</p>
+                  </li>
+                ))}
+                {!member.achievements.length && (
+                  <li class="text-sm text-slate-400">—</li>
+                )}
+              </ul>
+            </div>
+            <div>
+              <h2 class="mb-3 text-lg font-semibold text-slate-900">Badge & Sertifikat</h2>
+              <div class="mb-3 flex flex-wrap gap-1.5">
+                {member.badges.map((b) => (
+                  <span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
+                    {b.badge.name}
+                  </span>
+                ))}
+                {!member.badges.length && (
+                  <span class="text-sm text-slate-400">Belum ada badge</span>
+                )}
+              </div>
+              <ul class="space-y-2">
+                {member.certificates.map((c) => (
+                  <li class="rounded-xl border border-brand-100 bg-white px-3 py-2 text-sm">
+                    {c.title}
+                    <span class="block text-xs text-slate-400">
+                      {new Date(c.issuedAt).toLocaleDateString("id-ID")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        </>
+      )}
+    </main>
+  </div>
+</BaseLayout>

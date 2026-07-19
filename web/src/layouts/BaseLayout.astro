@@ -1,0 +1,28 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+}
+
+const { title = "ITCLUB" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#3b93f6" />
+    <meta
+      name="description"
+      content="ITCLUB Ekskul Management — keanggotaan, presensi, project, dan kegiatan."
+    />
+    <title>{title} · ITCLUB</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen font-sans antialiased text-slate-900">
+    <slot />
+  </body>
+</html>

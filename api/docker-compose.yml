@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: clubit
+      POSTGRES_PASSWORD: clubit
+      POSTGRES_DB: clubit
+    ports:
+      - "5433:5432"
+    volumes:
+      - clubit_pg:/var/lib/postgresql/data
+
+volumes:
+  clubit_pg:

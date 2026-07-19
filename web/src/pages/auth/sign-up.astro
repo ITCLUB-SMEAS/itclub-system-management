@@ -1,0 +1,15 @@
+---
+import AuthLayout from "../../layouts/AuthLayout.astro";
+import SignUpForm from "../../components/auth/SignUpForm";
+---
+
+<AuthLayout
+  title="Sign Up"
+  step={1}
+  panelQuote="Gabung IT Club — belajar, berkolaborasi, dan raih prestasi bareng."
+  panelAuthor="Member"
+  panelRole="Recruitment"
+  image="/auth/panel-2.svg"
+>
+  <SignUpForm client:only="react" />
+</AuthLayout>

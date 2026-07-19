@@ -1,0 +1,15 @@
+---
+import AuthLayout from "../layouts/AuthLayout.astro";
+import PublicApplyForm from "../components/recruitment/PublicApplyForm";
+---
+
+<AuthLayout
+  title="Daftar"
+  step={1}
+  panelQuote="Isi form di samping untuk mendaftar jadi anggota baru. Pengurus akan mereview aplikasi kamu."
+  panelAuthor="Recruitment"
+  panelRole="PSB Ekskul"
+  image="/auth/panel-2.svg"
+>
+  <PublicApplyForm client:only="react" />
+</AuthLayout>

@@ -1,0 +1,77 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+
+interface Props {
+  title: string;
+  panelQuote?: string;
+  panelAuthor?: string;
+  panelRole?: string;
+  image?: string;
+  step?: number;
+}
+
+const {
+  title,
+  panelQuote = "Kelola keanggotaan, presensi, project, dan kegiatan ekskul dalam satu platform.",
+  panelAuthor = "Member",
+  panelRole = "IT Club",
+  image = "/auth/panel-1.svg",
+  step = 0,
+} = Astro.props;
+
+const dots = [0, 1, 2, 3];
+---
+
+<BaseLayout title={title}>
+  <div class="min-h-screen bg-brand-50 flex items-center justify-center p-4 md:p-8">
+    <div
+      class="auth-card w-full max-w-6xl bg-white rounded-3xl shadow-xl shadow-brand-100/80 overflow-hidden grid grid-cols-1 md:grid-cols-2 min-h-[640px]"
+    >
+      <!-- Left panel: CSS background so it never depends on JS hydration -->
+      <aside
+        class="auth-panel relative hidden md:flex min-h-[640px] flex-col justify-end overflow-hidden"
+        style={`background-color:#bfe2fe;background-image:url('${image}');background-size:cover;background-position:center;`}
+        aria-hidden="true"
+      >
+        <div class="absolute inset-0 bg-gradient-to-t from-brand-900/75 via-brand-800/25 to-brand-600/10"></div>
+        <div class="relative z-10 p-8">
+          <div class="rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 p-5 text-white">
+            <p class="text-sm leading-relaxed opacity-95">"{panelQuote}"</p>
+            <div class="mt-4">
+              <p class="font-semibold text-sm">{panelAuthor}</p>
+              <p class="text-xs text-white/80">{panelRole}</p>
+            </div>
+          </div>
+          <div class="mt-4 flex gap-1.5">
+            {dots.map((i) => (
+              <span
+                class:list={[
+                  "h-1.5 rounded-full transition-all",
+                  i === step ? "w-8 bg-brand-200" : "w-1.5 bg-white/40",
+                ]}
+              />
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      <div class="flex flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 bg-white min-h-[640px]">
+        <slot />
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  /* Ensure left column always has size even if Tailwind utilities lag on HMR */
+  @media (min-width: 768px) {
+    .auth-card {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+    }
+    .auth-panel {
+      display: flex !important;
+      min-height: 640px !important;
+    }
+  }
+</style>

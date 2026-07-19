@@ -1,0 +1,52 @@
+name: PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      web: ${{ steps.filter.outputs.web }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+              - '.github/workflows/**'
+            web:
+              - 'web/**'
+              - '.github/workflows/**'
+            docker:
+              - 'docker-compose.yml'
+              - 'api/Dockerfile'
+              - 'web/Dockerfile'
+              - 'web/nginx.conf'
+              - '.github/workflows/**'
+
+  # Main CI already runs on PR; this workflow only posts a summary matrix.
+  summary:
+    name: Path summary
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        run: |
+          {
+            echo "## Change detection"
+            echo ""
+            echo "| Area | Changed |"
+            echo "|---|---|"
+            echo "| API | \`${{ needs.changes.outputs.api }}\` |"
+            echo "| Web | \`${{ needs.changes.outputs.web }}\` |"
+            echo "| Docker | \`${{ needs.changes.outputs.docker }}\` |"
+            echo ""
+            echo "Full checks run in the **CI** workflow."
+          } >> "$GITHUB_STEP_SUMMARY"

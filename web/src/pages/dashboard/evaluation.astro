@@ -1,0 +1,8 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import DashboardApp from "../../components/dashboard/DashboardApp";
+---
+
+<BaseLayout title="Dashboard">
+  <DashboardApp client:only="react" />
+</BaseLayout>

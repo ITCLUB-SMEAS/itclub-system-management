@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  DATABASE_URL: postgresql://clubit:clubit@localhost:5432/clubit?schema=public
+  JWT_SECRET: ci-test-jwt-secret-not-for-production
+  JWT_REFRESH_SECRET: ci-test-refresh-secret-not-for-production
+  JWT_EXPIRES_IN: 15m
+  JWT_REFRESH_EXPIRES_IN: 7d
+  NODE_ENV: test
+  CORS_ORIGINS: http://localhost:4321
+  PUBLIC_API_URL: http://localhost:3000/api/v1
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clubit
+          POSTGRES_PASSWORD: clubit
+          POSTGRES_DB: clubit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clubit -d clubit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Prisma migrate
+        run: npx prisma migrate deploy
+
+      - name: Lint
+        run: npx eslint "{src,apps,libs,test}/**/*.ts" --max-warnings 0
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test -- --coverage --coverageReporters=text-summary
+
+      - name: E2E smoke
+        run: npm run test:e2e
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      - name: Seed smoke
+        run: npx ts-node prisma/seed.ts
+
+      - name: Boot API smoke
+        run: |
+          node dist/main.js &
+          PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3000/api/v1/portfolio/showcase >/dev/null; then
+              echo "API up"
+              break
+            fi
+            sleep 1
+            if [ "$i" -eq 30 ]; then
+              echo "API failed to start"
+              kill $PID 2>/dev/null || true
+              exit 1
+            fi
+          done
+          curl -sf http://127.0.0.1:3000/api/v1/portfolio/showcase | head -c 200
+          echo
+          RESP=$(curl -sf -X POST http://127.0.0.1:3000/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"identifier":"ketua@clubit.local","password":"password123"}')
+          echo "$RESP" | head -c 120
+          echo
+          echo "$RESP" | grep -q accessToken
+          # inventory smoke
+          TOKEN=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['accessToken'])")
+          curl -sf -X POST http://127.0.0.1:3000/api/v1/inventory \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"Proyektor CI","condition":"baik"}' | grep -q Proyektor
+          kill $PID 2>/dev/null || true
+          wait $PID 2>/dev/null || true
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          PUBLIC_API_URL: ${{ env.PUBLIC_API_URL }}
+
+      - name: Check dist output
+        run: |
+          test -f dist/index.html
+          test -d dist/auth
+          test -d dist/dashboard
+          ls dist | head
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: false
+          tags: clubit-api:ci
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          push: false
+          tags: clubit-web:ci
+          build-args: |
+            PUBLIC_API_URL=http://localhost:3000/api/v1
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web

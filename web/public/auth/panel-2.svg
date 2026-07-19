@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1280" viewBox="0 0 960 1280" fill="none">
+  <defs>
+    <linearGradient id="bg2" x1="960" y1="0" x2="0" y2="1280" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EFF8FF"/>
+      <stop offset="0.5" stop-color="#60B4FA"/>
+      <stop offset="1" stop-color="#1D5ED8"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="1280" fill="url(#bg2)"/>
+  <circle cx="200" cy="240" r="160" fill="#FFFFFF" fill-opacity="0.15"/>
+  <circle cx="820" cy="1040" r="240" fill="#FFFFFF" fill-opacity="0.1"/>
+  <rect x="160" y="400" width="640" height="360" rx="40" fill="#FFFFFF" fill-opacity="0.2"/>
+  <rect x="220" y="480" width="200" height="200" rx="24" fill="#FFFFFF" fill-opacity="0.35"/>
+  <rect x="460" y="500" width="280" height="18" rx="9" fill="#FFFFFF" fill-opacity="0.75"/>
+  <rect x="460" y="540" width="240" height="14" rx="7" fill="#FFFFFF" fill-opacity="0.45"/>
+  <rect x="460" y="576" width="200" height="14" rx="7" fill="#FFFFFF" fill-opacity="0.35"/>
+  <rect x="460" y="620" width="160" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.55"/>
+</svg>
