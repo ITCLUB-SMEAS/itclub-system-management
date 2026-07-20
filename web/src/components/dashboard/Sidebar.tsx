@@ -18,7 +18,7 @@ import {
   LogOut,
   type LucideIcon,
 } from "lucide-react";
-import { clearSession, getUser, isPengurus } from "../../lib/api";
+import { authApi, clearSession, getUser, hydrateSession, isPengurus } from "../../lib/api";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 
 type NavItem = {
@@ -89,22 +89,26 @@ export default function Sidebar({
   const [role, setRole] = useState<string | undefined>();
 
   useEffect(() => {
-    const u = getUser();
-    if (!u) {
-      window.location.href = "/auth/sign-in";
-      return;
-    }
-    setUserName(u.username);
-    setEmail(u.email);
-    setRole(u.role);
+    void (async () => {
+      const u = (await hydrateSession()) ?? getUser();
+      if (!u) {
+        window.location.href = "/auth/sign-in";
+        return;
+      }
+      setUserName(u.username);
+      setEmail(u.email);
+      setRole(u.role);
+    })();
   }, []);
 
   const main = useMemo(() => mainNav.filter((i) => allowed(i, role)), [role]);
   const more = useMemo(() => moreNav.filter((i) => allowed(i, role)), [role]);
 
   function logout() {
-    clearSession();
-    window.location.href = "/auth/sign-in";
+    void authApi.logout().finally(() => {
+      clearSession();
+      window.location.href = "/auth/sign-in";
+    });
   }
 
   function go(e: MouseEvent<HTMLAnchorElement>, href: string) {

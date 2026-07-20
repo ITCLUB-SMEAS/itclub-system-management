@@ -12,6 +12,7 @@ export default function PublicApplyForm() {
   const [email, setEmail] = useState("");
   const [className, setClassName] = useState("");
   const [interestNotes, setInterestNotes] = useState("");
+  const [divisionPreference, setDivisionPreference] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [error, setError] = useState("");
   const [ok, setOk] = useState(false);
@@ -32,6 +33,7 @@ export default function PublicApplyForm() {
         email,
         className: className || undefined,
         interestNotes: interestNotes || undefined,
+        divisionPreference: divisionPreference || undefined,
         turnstileToken: turnstileToken || undefined,
       });
       setOk(true);
@@ -95,6 +97,13 @@ export default function PublicApplyForm() {
           value={className}
           onChange={(e) => setClassName(e.target.value)}
           placeholder="X RPL 1"
+        />
+        <AuthField
+          label="Preferensi divisi"
+          name="divisionPreference"
+          value={divisionPreference}
+          onChange={(e) => setDivisionPreference(e.target.value)}
+          placeholder="Web / Mobile / UI-UX / CP"
         />
         <div className="space-y-1.5">
           <label htmlFor="interestNotes" className="block text-sm font-medium text-slate-800">

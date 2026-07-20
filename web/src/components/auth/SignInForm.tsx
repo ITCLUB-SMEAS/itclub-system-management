@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { AuthField } from "./AuthField";
 import { PasswordField } from "./PasswordField";
 import { PrimaryButton } from "./PrimaryButton";
-import { authApi, setSession } from "../../lib/api";
+import { authApi } from "../../lib/api";
 import TurnstileWidget, {
   isTurnstileEnabled,
   resetTurnstile,
@@ -26,8 +26,7 @@ export default function SignInForm() {
     }
     setLoading(true);
     try {
-      const data = await authApi.login(identifier, password, turnstileToken || undefined);
-      setSession(data);
+      await authApi.login(identifier, password, turnstileToken || undefined);
       void remember;
       window.location.href = "/dashboard";
     } catch (err) {

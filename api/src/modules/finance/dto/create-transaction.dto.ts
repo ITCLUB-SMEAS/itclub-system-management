@@ -14,12 +14,16 @@ export class CreateTransactionDto {
   type!: TransactionType;
 
   @IsNumber()
-  @Min(0)
+  @Min(0.01)
   amount!: number;
 
   @IsString()
   @MinLength(2)
   description!: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
 
   @IsOptional()
   @IsString()

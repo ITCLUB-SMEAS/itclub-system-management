@@ -1,6 +1,14 @@
-import { Body, Controller, Ip, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Post,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -13,6 +21,11 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayload } from './types/jwt-payload';
+import {
+  clearAuthCookies,
+  readRefreshCookie,
+  setAuthCookies,
+} from '../../common/auth/auth-cookies';
 
 function clientIp(req: Request, fallback?: string) {
   const xf = req.headers['x-forwarded-for'];
@@ -34,14 +47,30 @@ export class AuthController {
   @Public()
   @Throttle({ auth: { limit: 15, ttl: 60_000 } })
   @Post('login')
-  login(@Body() dto: LoginDto, @Req() req: Request, @Ip() ip: string) {
-    return this.auth.login(dto, clientIp(req, ip));
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
+  ) {
+    const tokens = await this.auth.login(dto, clientIp(req, ip));
+    setAuthCookies(res, tokens);
+    return tokens;
   }
 
   @Public()
+  @Throttle({ auth: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
-  refresh(@Body() dto: RefreshDto) {
-    return this.auth.refresh(dto.refreshToken);
+  async refresh(
+    @Body() dto: RefreshDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
+  ) {
+    const refreshToken = dto.refreshToken ?? readRefreshCookie(req) ?? '';
+    const tokens = await this.auth.refresh(refreshToken, clientIp(req, ip));
+    setAuthCookies(res, tokens);
+    return tokens;
   }
 
   @Public()
@@ -69,23 +98,72 @@ export class AuthController {
   @Public()
   @Throttle({ auth: { limit: 10, ttl: 60_000 } })
   @Post('reset-password')
-  resetPassword(
+  async resetPassword(
     @Body() dto: ResetPasswordDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
     @Ip() ip: string,
   ) {
-    return this.auth.resetPassword(
+    const result = await this.auth.resetPassword(
       dto.email,
       dto.code,
       dto.password,
       dto.turnstileToken,
       clientIp(req, ip),
     );
+    clearAuthCookies(res);
+    return result;
+  }
+
+  /** Session bootstrap — cookies only, no token in JS */
+  @Get('me')
+  me(@CurrentUser() user: JwtPayload) {
+    return {
+      id: user.sub,
+      email: user.email,
+      username: user.username,
+      memberId: user.memberId,
+      role: user.role,
+      periodId: user.periodId,
+    };
   }
 
   @Post('logout')
-  logout(@CurrentUser() user: JwtPayload, @Body() dto: RefreshDto) {
-    return this.auth.logout(user.sub, dto.refreshToken);
+  async logout(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: RefreshDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
+  ) {
+    const refreshToken = dto.refreshToken ?? readRefreshCookie(req) ?? undefined;
+    const result = await this.auth.logout(
+      user.sub,
+      refreshToken,
+      clientIp(req, ip),
+    );
+    clearAuthCookies(res);
+    return result;
+  }
+
+  /** Clear cookies even if access JWT already expired */
+  @Public()
+  @Post('logout-cookie')
+  async logoutCookie(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
+  ) {
+    const refreshToken = readRefreshCookie(req);
+    if (refreshToken) {
+      try {
+        await this.auth.logoutByRefreshToken(refreshToken, clientIp(req, ip));
+      } catch {
+        /* ignore */
+      }
+    }
+    clearAuthCookies(res);
+    return { success: true };
   }
 
   @Post('device-token')
@@ -99,8 +177,19 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ auth: { limit: 15, ttl: 60_000 } })
   @Post('biometric-login')
-  biometricLogin(@Body() dto: BiometricLoginDto) {
-    return this.auth.biometricLogin(dto.biometricKey);
+  async biometricLogin(
+    @Body() dto: BiometricLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Ip() ip: string,
+  ) {
+    const tokens = await this.auth.biometricLogin(
+      dto.biometricKey,
+      clientIp(req, ip),
+    );
+    setAuthCookies(res, tokens);
+    return tokens;
   }
 }

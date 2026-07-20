@@ -18,5 +18,9 @@ export class ApplyDto {
 
   @IsOptional()
   @IsString()
+  divisionPreference?: string;
+
+  @IsOptional()
+  @IsString()
   turnstileToken?: string;
 }

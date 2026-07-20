@@ -1,4 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import { CreatePeerReviewDto } from './dto/create-peer-review.dto';
@@ -7,16 +13,30 @@ import { CreatePeerReviewDto } from './dto/create-peer-review.dto';
 export class EvaluationService {
   constructor(private prisma: PrismaService) {}
 
-  createEvaluation(giverId: string, dto: CreateEvaluationDto) {
-    return this.prisma.evaluation.create({
-      data: {
-        periodId: dto.periodId,
-        giverId,
-        targetRole: dto.targetRole,
-        score: dto.score,
-        comment: dto.comment,
-      },
+  async createEvaluation(giverId: string, dto: CreateEvaluationDto) {
+    const period = await this.prisma.membershipPeriod.findUnique({
+      where: { id: dto.periodId },
     });
+    if (!period) throw new NotFoundException('Period not found');
+    if (dto.score < 1 || dto.score > 5) {
+      throw new BadRequestException('score must be 1–5');
+    }
+
+    try {
+      return await this.prisma.evaluation.create({
+        data: {
+          periodId: dto.periodId,
+          giverId,
+          targetRole: dto.targetRole,
+          score: dto.score,
+          comment: dto.comment,
+        },
+      });
+    } catch {
+      throw new ConflictException(
+        'Sudah menilai role ini di periode tersebut',
+      );
+    }
   }
 
   async summary(periodId: string) {
@@ -35,15 +55,38 @@ export class EvaluationService {
     return {
       periodId,
       totalResponses: evaluations.length,
-      byRole: [...byRole.entries()].map(([role, v]) => ({
-        role,
-        average: v.count ? v.total / v.count : 0,
-        count: v.count,
-      })),
+      byRole: [...byRole.entries()]
+        .map(([role, v]) => ({
+          role,
+          average: v.count
+            ? Math.round((v.total / v.count) * 10) / 10
+            : 0,
+          count: v.count,
+        }))
+        .sort((a, b) => a.role.localeCompare(b.role)),
     };
   }
 
-  createPeerReview(reviewerId: string, dto: CreatePeerReviewDto) {
+  async createPeerReview(reviewerId: string, dto: CreatePeerReviewDto) {
+    if (reviewerId === dto.revieweeId) {
+      throw new BadRequestException('Tidak bisa review diri sendiri');
+    }
+    if (dto.score < 1 || dto.score > 5) {
+      throw new BadRequestException('score must be 1–5');
+    }
+
+    const reviewee = await this.prisma.member.findUnique({
+      where: { id: dto.revieweeId },
+    });
+    if (!reviewee) throw new NotFoundException('Reviewee not found');
+
+    if (dto.projectId) {
+      const project = await this.prisma.project.findUnique({
+        where: { id: dto.projectId },
+      });
+      if (!project) throw new NotFoundException('Project not found');
+    }
+
     return this.prisma.peerReview.create({
       data: {
         reviewerId,
@@ -51,6 +94,11 @@ export class EvaluationService {
         projectId: dto.projectId,
         score: dto.score,
         comment: dto.comment,
+      },
+      include: {
+        reviewer: { select: { id: true, fullName: true } },
+        reviewee: { select: { id: true, fullName: true } },
+        project: { select: { id: true, name: true } },
       },
     });
   }
@@ -64,5 +112,25 @@ export class EvaluationService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  myGivenReviews(reviewerId: string) {
+    return this.prisma.peerReview.findMany({
+      where: { reviewerId },
+      include: {
+        reviewee: { select: { id: true, fullName: true } },
+        project: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  assertCanViewPeer(
+    targetMemberId: string,
+    viewerMemberId?: string,
+    isPengurus?: boolean,
+  ) {
+    if (isPengurus || targetMemberId === viewerMemberId) return;
+    throw new ForbiddenException('Cannot view other peer reviews');
   }
 }

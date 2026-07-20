@@ -4,8 +4,9 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
 <BaseLayout title="Home">
   <script is:inline>
-    const token = localStorage.getItem("accessToken");
-    window.location.replace(token ? "/dashboard" : "/auth/sign-in");
+    // Cookie session: profile in localStorage; tokens are HttpOnly
+    const user = localStorage.getItem("clubit_user") || localStorage.getItem("user");
+    window.location.replace(user ? "/dashboard" : "/auth/sign-in");
   </script>
   <div class="flex min-h-screen items-center justify-center bg-brand-50">
     <p class="text-sm text-brand-700 font-medium">Loading ITCLUB...</p>

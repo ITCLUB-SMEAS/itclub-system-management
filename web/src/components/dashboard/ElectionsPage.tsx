@@ -144,6 +144,18 @@ export default function ElectionsPage() {
     }
   }
 
+  async function closePoll(pollId: string) {
+    setBusy(true);
+    try {
+      await electionsApi.closePoll(pollId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal tutup poll");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function pollVote(pollId: string, optionId: string) {
     setBusy(true);
     try {
@@ -378,9 +390,26 @@ export default function ElectionsPage() {
                       key={poll.id}
                       className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm"
                     >
-                      <h3 className="font-semibold text-slate-900">{poll.question}</h3>
+                      <div className="mb-1 flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-slate-900">{poll.question}</h3>
+                        {poll.closed ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                            CLOSED
+                          </span>
+                        ) : pengurus ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void closePoll(poll.id)}
+                            className="text-[10px] font-medium text-rose-600 hover:underline"
+                          >
+                            Tutup
+                          </button>
+                        ) : null}
+                      </div>
                       <p className="mb-3 text-xs text-slate-400">
                         {new Date(poll.createdAt).toLocaleString("id-ID")}
+                        {poll._count ? ` · ${poll._count.votes} suara` : ""}
                       </p>
                       <div className="space-y-2">
                         {poll.options.map((opt) => (
@@ -400,14 +429,16 @@ export default function ElectionsPage() {
                                 }}
                               />
                             </div>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void pollVote(poll.id, opt.id)}
-                              className="text-xs font-medium text-brand-600 hover:underline"
-                            >
-                              Pilih
-                            </button>
+                            {!poll.closed && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void pollVote(poll.id, opt.id)}
+                                className="text-xs font-medium text-brand-600 hover:underline"
+                              >
+                                Pilih
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>

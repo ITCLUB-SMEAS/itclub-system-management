@@ -165,7 +165,9 @@ Keputusan produk: **full all-in-one dari rilis pertama** — bukan MVP yang dipa
 ## 10. Notes for AI Coding Agents
 
 - Ikuti struktur modular NestJS (`src/modules/<domain>`) — satu module per domain di Section 5
-- Schema Prisma di `prisma/schema.prisma`, migration lewat `prisma migrate dev`
+- Schema Prisma **single source**: `api/prisma/schema.prisma` (root `schema.prisma` = symlink). Migration: `cd api && npx prisma migrate dev`
+- Secrets: `JWT_SECRET` + `JWT_REFRESH_SECRET` min 32 chars, bukan placeholder; production boot gagal jika lemah
+- Audit log (`AuditLog`) untuk aksi sensitif: auth, member approve/reject, finance, recruitment, vote
 - Astro pages untuk konten statis/SSG; gunakan island (React/Vue) hanya untuk bagian yang butuh interaktivitas (dashboard, kanban, form dinamis)
 - Semua endpoint API harus tervalidasi RBAC sesuai role di Section 2 sebelum implementasi fitur baru
 - Jangan implementasikan fitur yang masuk kategori "Out of Scope" (Section 9) kecuali ada instruksi eksplisit baru

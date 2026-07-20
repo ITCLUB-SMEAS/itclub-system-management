@@ -46,6 +46,13 @@ export class IntegrationsController {
     return this.integrations.discordNotify(body);
   }
 
+  @Get('status')
+  @UseGuards(RolesGuard)
+  @Roles(...PENGURUS_ROLES)
+  status() {
+    return this.integrations.status();
+  }
+
   @Get('calendar/sync.ics')
   async calendarIcs(@Res() res: Response) {
     const ics = await this.integrations.calendarIcs();

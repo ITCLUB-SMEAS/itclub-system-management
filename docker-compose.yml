@@ -24,13 +24,15 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://clubit:${POSTGRES_PASSWORD:-clubit}@db:5432/clubit?schema=public
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-clubit-jwt-secret-key}
+      # Require real secrets — no weak defaults (boot fails in production without them)
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (min 32 chars, not a placeholder)}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-in-production-clubit-refresh-secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env (min 32 chars)}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       PORT: 3000
-      NODE_ENV: production
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:4321}
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:4321,http://127.0.0.1:4321}
+      # Cookies set for same-origin via nginx; CORS still needed for direct API hits
       THROTTLE_TTL: ${THROTTLE_TTL:-60000}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -49,7 +51,8 @@ services:
     build:
       context: ./web
       args:
-        PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000/api/v1}
+        # Relative URL — nginx proxies /api → api container (cookies same-origin)
+        PUBLIC_API_URL: ${PUBLIC_API_URL:-/api/v1}
         PUBLIC_TURNSTILE_SITE_KEY: ${PUBLIC_TURNSTILE_SITE_KEY:-}
     restart: unless-stopped
     depends_on:

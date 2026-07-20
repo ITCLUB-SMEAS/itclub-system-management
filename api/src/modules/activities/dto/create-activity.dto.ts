@@ -1,8 +1,11 @@
 import {
   IsDateString,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -26,6 +29,13 @@ export class CreateActivityDto {
   @IsOptional()
   @IsNumber()
   longitude?: number;
+
+  /** meters; default 100 when lat/lng set */
+  @IsOptional()
+  @IsInt()
+  @Min(20)
+  @Max(5000)
+  geofenceRadiusM?: number;
 
   @IsDateString()
   startTime!: string;

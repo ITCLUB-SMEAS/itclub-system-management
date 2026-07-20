@@ -110,27 +110,47 @@ model RefreshToken {
 }
 
 model DeviceToken {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token        String   @unique
-  platform     String
-  biometricKey String?
-  createdAt    DateTime @default(now())
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token            String   @unique
+  platform         String
+  /// SHA-256 hex of client biometric secret — never store raw
+  biometricKeyHash String?
+  createdAt        DateTime @default(now())
 
   @@index([userId])
+  @@index([biometricKeyHash])
+}
+
+// ============ AUDIT ============
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  meta       Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 model MembershipPeriod {
-  id           String         @id @default(cuid())
-  name         String
-  startDate    DateTime
-  endDate      DateTime
-  isActive     Boolean        @default(false)
-  members      MemberPeriod[]
-  elections    Election[]
-  transactions Transaction[]
-  evaluations  Evaluation[]
+  id               String            @id @default(cuid())
+  name             String
+  startDate        DateTime
+  endDate          DateTime
+  isActive         Boolean           @default(false)
+  members          MemberPeriod[]
+  elections        Election[]
+  transactions     Transaction[]
+  evaluations      Evaluation[]
+  financialReports FinancialReport[]
 }
 
 model Division {
@@ -173,6 +193,7 @@ model Member {
   menteeOf            MentorAssignment[] @relation("MenteeRelation")
   feedbackGiven       Feedback[]         @relation("FeedbackGiver")
   achievements        Achievement[]
+  learningProgress    LearningProgress[]
 
   createdAt DateTime @default(now())
 }
@@ -195,16 +216,20 @@ model MemberPeriod {
 // ============ PRESENSI & KEGIATAN ============
 
 model Activity {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  location    String?
-  latitude    Float?
-  longitude   Float?
-  qrToken     String       @unique @default(cuid())
-  startTime   DateTime
-  endTime     DateTime
-  attendances Attendance[]
+  id               String       @id @default(cuid())
+  title            String
+  description      String?
+  location         String?
+  latitude         Float?
+  longitude        Float?
+  /// meters; null = geofence off
+  geofenceRadiusM  Int?
+  qrToken          String       @unique @default(cuid())
+  qrTokenExpiresAt DateTime?
+  startTime        DateTime
+  endTime          DateTime
+  reminderSentAt   DateTime?
+  attendances      Attendance[]
 }
 
 model Attendance {
@@ -215,6 +240,8 @@ model Attendance {
   member      Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
   checkedInAt DateTime         @default(now())
   method      AttendanceMethod @default(MANUAL)
+  latitude    Float?
+  longitude   Float?
 
   @@unique([activityId, memberId])
   @@index([memberId])
@@ -223,15 +250,19 @@ model Attendance {
 // ============ EVENT & PRESTASI ============
 
 model Event {
-  id            String              @id @default(cuid())
-  title         String
-  description   String?
-  type          String
-  startDate     DateTime
-  endDate       DateTime?
-  registrations EventRegistration[]
-  achievements  Achievement[]
-  galleries     GalleryItem[]
+  id                String              @id @default(cuid())
+  title             String
+  description       String?
+  type              String
+  location          String?
+  capacity          Int?
+  registrationOpen  Boolean             @default(true)
+  startDate         DateTime
+  endDate           DateTime?
+  reminderSentAt    DateTime?
+  registrations     EventRegistration[]
+  achievements      Achievement[]
+  galleries         GalleryItem[]
 }
 
 model EventRegistration {
@@ -324,18 +355,38 @@ model MentorAssignment {
 // ============ KEUANGAN ============
 
 model Transaction {
-  id           String           @id @default(cuid())
+  id           String            @id @default(cuid())
   type         TransactionType
-  amount       Decimal          @db.Decimal(12, 2)
+  amount       Decimal           @db.Decimal(12, 2)
   description  String
+  category     String?
   periodId     String?
   period       MembershipPeriod? @relation(fields: [periodId], references: [id])
   recordedById String
-  recordedBy   Member           @relation(fields: [recordedById], references: [id])
-  occurredAt   DateTime         @default(now())
+  recordedBy   Member            @relation(fields: [recordedById], references: [id])
+  occurredAt   DateTime          @default(now())
+  voidedAt     DateTime?
+  voidedById   String?
 
   @@index([periodId])
   @@index([recordedById])
+  @@index([voidedAt])
+}
+
+model FinancialReport {
+  id          String            @id @default(cuid())
+  periodId    String?
+  period      MembershipPeriod? @relation(fields: [periodId], references: [id])
+  income      Decimal           @db.Decimal(14, 2)
+  expense     Decimal           @db.Decimal(14, 2)
+  balance     Decimal           @db.Decimal(14, 2)
+  txCount     Int
+  generatedBy String?
+  note        String?
+  createdAt   DateTime          @default(now())
+
+  @@index([periodId])
+  @@index([createdAt])
 }
 
 // ============ KOMUNIKASI ============
@@ -408,47 +459,87 @@ model Certificate {
 // ============ LEARNING & KNOWLEDGE BASE ============
 
 model LearningResource {
-  id             String        @id @default(cuid())
+  id             String            @id @default(cuid())
   title          String
   type           String
   url            String
+  description    String?
+  sortOrder      Int               @default(0)
   divisionId     String?
-  division       Division?     @relation(fields: [divisionId], references: [id])
+  division       Division?         @relation(fields: [divisionId], references: [id])
   learningPathId String?
-  learningPath   LearningPath? @relation(fields: [learningPathId], references: [id])
+  learningPath   LearningPath?     @relation(fields: [learningPathId], references: [id])
+  progress       LearningProgress[]
+  createdAt      DateTime          @default(now())
+
+  @@index([learningPathId])
+  @@index([divisionId])
 }
 
 model LearningPath {
-  id         String             @id @default(cuid())
-  name       String
-  level      String
-  divisionId String?
-  division   Division?          @relation(fields: [divisionId], references: [id])
-  resources  LearningResource[]
+  id          String             @id @default(cuid())
+  name        String
+  level       String
+  description String?
+  sortOrder   Int                @default(0)
+  divisionId  String?
+  division    Division?          @relation(fields: [divisionId], references: [id])
+  resources   LearningResource[]
+}
+
+model LearningProgress {
+  id         String           @id @default(cuid())
+  memberId   String
+  member     Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  resourceId String
+  resource   LearningResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  completed  Boolean          @default(true)
+  completedAt DateTime        @default(now())
+
+  @@unique([memberId, resourceId])
+  @@index([memberId])
 }
 
 // ============ REKRUTMEN ============
 
+enum RecruitmentStage {
+  FORM
+  TEST
+  INTERVIEW
+  ANNOUNCEMENT
+}
+
 model RecruitmentApplication {
-  id            String         @id @default(cuid())
-  fullName      String
-  email         String
-  className     String?
-  interestNotes String?
-  status        ApprovalStatus @default(PENDING)
-  appliedAt     DateTime       @default(now())
+  id                 String           @id @default(cuid())
+  fullName           String
+  email              String
+  className          String?
+  interestNotes      String?
+  divisionPreference String?
+  stage              RecruitmentStage @default(FORM)
+  status             ApprovalStatus   @default(PENDING)
+  /// JSON checklist: { "akun": true, "intro": false, ... }
+  onboarding         Json?
+  notes              String?
+  appliedAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([status])
+  @@index([stage])
 }
 
 // ============ PEMILU & VOTING ============
 
 model Election {
-  id         String              @id @default(cuid())
-  periodId   String
-  period     MembershipPeriod    @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  title      String
-  status     ElectionStatus      @default(DRAFT)
-  candidates ElectionCandidate[]
-  votes      Vote[]
+  id          String              @id @default(cuid())
+  periodId    String
+  period      MembershipPeriod    @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      ElectionStatus      @default(DRAFT)
+  endsAt      DateTime?
+  candidates  ElectionCandidate[]
+  votes       Vote[]
 }
 
 model ElectionCandidate {
@@ -478,6 +569,8 @@ model Vote {
 model Poll {
   id        String       @id @default(cuid())
   question  String
+  closed    Boolean      @default(false)
+  endsAt    DateTime?
   options   PollOption[]
   votes     PollVote[]
   createdAt DateTime     @default(now())
@@ -508,10 +601,14 @@ model PollVote {
 // ============ PEMINJAMAN INVENTARIS ============
 
 model InventoryItem {
-  id        String          @id @default(cuid())
-  name      String
-  condition String?
-  loans     InventoryLoan[]
+  id           String          @id @default(cuid())
+  name         String
+  condition    String?
+  quantity     Int             @default(1)
+  serialNumber String?
+  notes        String?
+  loans        InventoryLoan[]
+  createdAt    DateTime        @default(now())
 }
 
 model InventoryLoan {
@@ -521,10 +618,14 @@ model InventoryLoan {
   memberId   String
   member     Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
   status     LoanStatus    @default(REQUESTED)
+  notes      String?
+  dueDate    DateTime?
   borrowedAt DateTime?
   returnedAt DateTime?
 
   @@index([memberId])
+  @@index([status])
+  @@index([dueDate])
 }
 
 // ============ EVALUASI & FEEDBACK ============
@@ -540,6 +641,7 @@ model Evaluation {
   comment    String?
   createdAt  DateTime         @default(now())
 
+  @@unique([periodId, giverId, targetRole])
   @@index([periodId])
 }
 
@@ -556,4 +658,5 @@ model PeerReview {
   createdAt  DateTime @default(now())
 
   @@index([revieweeId])
+  @@index([reviewerId])
 }

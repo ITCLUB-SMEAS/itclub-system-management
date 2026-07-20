@@ -1,4 +1,11 @@
-import { ArrayMinSize, IsArray, IsString, MinLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class CreatePollDto {
   @IsString()
@@ -9,4 +16,8 @@ export class CreatePollDto {
   @ArrayMinSize(2)
   @IsString({ each: true })
   options!: string[];
+
+  @IsOptional()
+  @IsDateString()
+  endsAt?: string;
 }

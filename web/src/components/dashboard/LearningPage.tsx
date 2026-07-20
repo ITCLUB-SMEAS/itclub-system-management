@@ -7,6 +7,7 @@ import {
   isPengurus,
   type LearningPath,
   type LearningResource,
+  type LearningPathSummary,
   type Division,
 } from "../../lib/api";
 import DashboardShell from "../common/DashboardShell";
@@ -14,11 +15,13 @@ import DashboardShell from "../common/DashboardShell";
 export default function LearningPage() {
   const [paths, setPaths] = useState<LearningPath[]>([]);
   const [resources, setResources] = useState<LearningResource[]>([]);
+  const [summary, setSummary] = useState<LearningPathSummary[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [pathId, setPathId] = useState("");
   const [divisionId, setDivisionId] = useState("");
   const [pengurus, setPengurus] = useState(false);
   const [error, setError] = useState("");
+  const [okMsg, setOkMsg] = useState("");
   const [showPath, setShowPath] = useState(false);
   const [showRes, setShowRes] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -33,15 +36,17 @@ export default function LearningPage() {
   const [rDiv, setRDiv] = useState("");
 
   async function load() {
-    const [p, r] = await Promise.all([
-      learningApi.paths(),
+    const [p, r, s] = await Promise.all([
+      learningApi.paths(divisionId || undefined),
       learningApi.resources({
         pathId: pathId || undefined,
         divisionId: divisionId || undefined,
       }),
+      learningApi.progressSummary().catch(() => [] as LearningPathSummary[]),
     ]);
     setPaths(p);
     setResources(r);
+    setSummary(s);
   }
 
   useEffect(() => {
@@ -105,12 +110,34 @@ export default function LearningPage() {
     }
   }
 
+  async function toggleComplete(r: LearningResource) {
+    setBusy(true);
+    setError("");
+    try {
+      if (r.completed) await learningApi.uncomplete(r.id);
+      else await learningApi.complete(r.id);
+      await load();
+      setOkMsg(r.completed ? "Progress dibatalkan" : "Materi ditandai selesai");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal update progress");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const summaryMap = new Map(summary.map((s) => [s.pathId, s]));
+
   return (
     <DashboardShell active="/dashboard/learning" title="Learning" crumbs={["Dashboard", "Learning"]}>
 
           {error && (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {error}
+            </div>
+          )}
+          {okMsg && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {okMsg}
             </div>
           )}
 
@@ -288,8 +315,26 @@ export default function LearningPage() {
                 </div>
                 <h3 className="font-semibold text-slate-900">{p.name}</h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  {p.division?.name ?? "Umum"} · {p.resources?.length ?? 0} materi
+                  {p.division?.name ?? "Umum"} ·{" "}
+                  {p._count?.resources ?? p.resources?.length ?? 0} materi
                 </p>
+                {summaryMap.get(p.id) && (
+                  <div className="mt-2">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-brand-500"
+                        style={{
+                          width: `${summaryMap.get(p.id)!.percent}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      {summaryMap.get(p.id)!.completed}/
+                      {summaryMap.get(p.id)!.total} ·{" "}
+                      {summaryMap.get(p.id)!.percent}%
+                    </p>
+                  </div>
+                )}
               </button>
             ))}
             {!paths.length && (
@@ -311,7 +356,10 @@ export default function LearningPage() {
                   className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
                 >
                   <div>
-                    <p className="font-medium text-slate-900">{r.title}</p>
+                    <p className="font-medium text-slate-900">
+                      {r.completed ? "✓ " : ""}
+                      {r.title}
+                    </p>
                     <p className="text-xs text-slate-400">
                       {r.type}
                       {r.learningPath ? ` · ${r.learningPath.name}` : ""}
@@ -319,6 +367,18 @@ export default function LearningPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void toggleComplete(r)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                        r.completed
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {r.completed ? "Selesai" : "Tandai selesai"}
+                    </button>
                     <a
                       href={r.url}
                       target="_blank"

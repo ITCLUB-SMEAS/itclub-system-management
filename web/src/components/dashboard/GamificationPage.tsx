@@ -8,12 +8,15 @@ import {
   type Badge,
   type LeaderboardRow,
   type Member,
+  type MyGamification,
+  type Certificate,
 } from "../../lib/api";
 import DashboardShell from "../common/DashboardShell";
 
 export default function GamificationPage() {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [board, setBoard] = useState<LeaderboardRow[]>([]);
+  const [me, setMe] = useState<MyGamification | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [pengurus, setPengurus] = useState(false);
   const [isKetua, setIsKetua] = useState(false);
@@ -23,6 +26,7 @@ export default function GamificationPage() {
   const [showAward, setShowAward] = useState(false);
   const [showCert, setShowCert] = useState(false);
   const [msg, setMsg] = useState("");
+  const [lastCert, setLastCert] = useState<Certificate | null>(null);
 
   const [bName, setBName] = useState("");
   const [bDesc, setBDesc] = useState("");
@@ -32,12 +36,14 @@ export default function GamificationPage() {
   const [certTitle, setCertTitle] = useState("");
 
   async function load() {
-    const [b, l] = await Promise.all([
+    const [b, l, mine] = await Promise.all([
       gamificationApi.badges(),
       gamificationApi.leaderboard(),
+      gamificationApi.me().catch(() => null),
     ]);
     setBadges(b);
     setBoard(l);
+    setMe(mine);
   }
 
   useEffect(() => {
@@ -90,13 +96,15 @@ export default function GamificationPage() {
     setBusy(true);
     setMsg("");
     try {
-      await gamificationApi.generateCertificate({
+      const cert = await gamificationApi.generateCertificate({
         memberId: certMember,
         title: certTitle,
       });
-      setMsg("Sertifikat dicatat");
+      setLastCert(cert);
+      setMsg("Sertifikat dicatat — unduh PDF tersedia");
       setCertTitle("");
       setShowCert(false);
+      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal");
     } finally {
@@ -118,7 +126,76 @@ export default function GamificationPage() {
             </div>
           )}
 
+          {me && (
+            <div className="mb-4 grid gap-3 rounded-2xl border border-brand-100 bg-white p-5 shadow-sm sm:grid-cols-4">
+              <div>
+                <p className="text-xs text-slate-400">Poin saya</p>
+                <p className="text-2xl font-bold text-brand-700">{me.points}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Peringkat</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {me.rank ? `#${me.rank}` : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Badge</p>
+                <p className="text-2xl font-bold text-slate-800">{me.badges}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Sertifikat</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {me.certificates?.length ?? 0}
+                </p>
+              </div>
+              {!!me.certificates?.length && (
+                <div className="sm:col-span-4 flex flex-wrap gap-2">
+                  {me.certificates.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() =>
+                        void gamificationApi
+                          .downloadCertificatePdf(c.id)
+                          .catch((e) =>
+                            setError(e instanceof Error ? e.message : "Gagal PDF"),
+                          )
+                      }
+                      className="rounded-full border border-brand-200 px-3 py-1 text-xs font-medium text-brand-700"
+                    >
+                      PDF: {c.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void gamificationApi
+                  .evaluateMe()
+                  .then((r) => {
+                    setMsg(
+                      r.awarded.length
+                        ? `Milestone: ${r.awarded.join(", ")}`
+                        : "Belum ada milestone baru",
+                    );
+                    return load();
+                  })
+                  .catch((e) =>
+                    setError(e instanceof Error ? e.message : "Gagal evaluate"),
+                  )
+                  .finally(() => setBusy(false));
+              }}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+            >
+              <Trophy size={16} /> Cek milestone
+            </button>
             {isKetua && (
               <button
                 type="button"
@@ -145,6 +222,21 @@ export default function GamificationPage() {
                   <Award size={16} /> Sertifikat
                 </button>
               </>
+            )}
+            {lastCert && (
+              <button
+                type="button"
+                onClick={() =>
+                  void gamificationApi
+                    .downloadCertificatePdf(lastCert.id)
+                    .catch((e) =>
+                      setError(e instanceof Error ? e.message : "Gagal PDF"),
+                    )
+                }
+                className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700"
+              >
+                Unduh PDF terakhir
+              </button>
             )}
           </div>
 

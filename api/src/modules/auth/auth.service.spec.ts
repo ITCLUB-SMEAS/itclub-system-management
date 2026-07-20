@@ -1,4 +1,8 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -26,8 +30,18 @@ function makeService(overrides?: {
       create: jest.fn(),
       findUnique: jest.fn(),
       updateMany: jest.fn(),
+      update: jest.fn(),
     },
-    $transaction: jest.fn((ops: unknown) => Promise.all(ops as Promise<unknown>[])),
+    deviceToken: {
+      upsert: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({}),
+    },
+    $transaction: jest.fn((ops: unknown) =>
+      Promise.all(ops as Promise<unknown>[]),
+    ),
     ...overrides?.prisma,
   };
 
@@ -38,6 +52,7 @@ function makeService(overrides?: {
   const config = {
     get: jest.fn((k: string, def?: string) => {
       if (k === 'JWT_EXPIRES_IN') return '15m';
+      if (k === 'JWT_REFRESH_EXPIRES_IN') return '7d';
       if (k === 'NODE_ENV') return 'test';
       return def;
     }),
@@ -56,15 +71,20 @@ function makeService(overrides?: {
     verify: jest.fn().mockResolvedValue(true),
   };
 
+  const audit = {
+    log: jest.fn().mockResolvedValue(null),
+  };
+
   const service = new AuthService(
     prisma as never,
     jwt,
     config,
     mail as never,
     turnstile as never,
+    audit as never,
   );
 
-  return { service, prisma, jwt, turnstile, mail };
+  return { service, prisma, jwt, turnstile, mail, audit };
 }
 
 describe('AuthService', () => {
@@ -115,6 +135,27 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
+    it('rejects pending approval', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findFirst.mockResolvedValue({
+        id: 'u1',
+        email: 'p@x.com',
+        username: 'p',
+        passwordHash: 'hash',
+        member: {
+          id: 'm1',
+          approvalStatus: 'PENDING',
+          status: 'ACTIVE',
+          periods: [],
+        },
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.login({ identifier: 'p', password: 'password123' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
     it('returns tokens on success', async () => {
       const { service, prisma, jwt } = makeService();
       prisma.user.findFirst.mockResolvedValue({
@@ -124,6 +165,8 @@ describe('AuthService', () => {
         passwordHash: 'hash',
         member: {
           id: 'm1',
+          approvalStatus: 'APPROVED',
+          status: 'ACTIVE',
           periods: [{ role: 'KETUA', periodId: 'p1' }],
         },
       });

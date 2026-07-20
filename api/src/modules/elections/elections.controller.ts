@@ -34,14 +34,32 @@ export class ElectionsController {
 
   @Post('elections')
   @Roles(RoleName.KETUA)
-  createElection(@Body() dto: CreateElectionDto) {
-    return this.elections.createElection(dto);
+  createElection(
+    @Body() dto: CreateElectionDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.elections.createElection(dto, user.sub);
+  }
+
+  @Get('elections/:id')
+  getElection(@Param('id') id: string) {
+    return this.elections.getElection(id, false);
+  }
+
+  @Get('elections/:id/voted')
+  hasVoted(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    if (!user.memberId) throw new BadRequestException('Member profile required');
+    return this.elections.hasVoted(id, user.memberId);
   }
 
   @Patch('elections/:id/status')
   @Roles(RoleName.KETUA)
-  setStatus(@Param('id') id: string, @Body() dto: SetElectionStatusDto) {
-    return this.elections.setStatus(id, dto.status);
+  setStatus(
+    @Param('id') id: string,
+    @Body() dto: SetElectionStatusDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.elections.setStatus(id, dto.status, user.sub);
   }
 
   @Post('elections/:id/candidates')
@@ -61,9 +79,9 @@ export class ElectionsController {
   }
 
   @Get('elections/:id/results')
-  @Roles(...PENGURUS_ROLES)
-  results(@Param('id') id: string) {
-    return this.elections.results(id);
+  results(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const isPengurus = !!(user.role && PENGURUS_ROLES.includes(user.role));
+    return this.elections.results(id, isPengurus);
   }
 
   @Get('polls')
@@ -73,8 +91,19 @@ export class ElectionsController {
 
   @Post('polls')
   @Roles(...PENGURUS_ROLES)
-  createPoll(@Body() dto: CreatePollDto) {
-    return this.elections.createPoll(dto);
+  createPoll(@Body() dto: CreatePollDto, @CurrentUser() user: JwtPayload) {
+    return this.elections.createPoll(dto, user.sub);
+  }
+
+  @Post('polls/:id/close')
+  @Roles(...PENGURUS_ROLES)
+  closePoll(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.elections.closePoll(id, user.sub);
+  }
+
+  @Get('polls/:id')
+  pollResults(@Param('id') id: string) {
+    return this.elections.pollResults(id);
   }
 
   @Post('polls/:id/vote')

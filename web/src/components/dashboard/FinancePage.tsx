@@ -40,9 +40,11 @@ export default function FinancePage() {
   const [type, setType] = useState<"INCOME" | "EXPENSE">("INCOME");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
   const [exporting, setExporting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState("");
 
   function closePreview() {
     if (pdfUrl) URL.revokeObjectURL(pdfUrl);
@@ -95,12 +97,15 @@ export default function FinancePage() {
         type,
         amount: Number(amount),
         description,
+        category: category || undefined,
         periodId: periodId || undefined,
       });
       setAmount("");
       setDescription("");
+      setCategory("");
       setShowForm(false);
       await load(periodId || undefined);
+      setOkMsg("Transaksi dicatat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal");
     } finally {
@@ -114,6 +119,11 @@ export default function FinancePage() {
           {error && (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {error}
+            </div>
+          )}
+          {okMsg && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {okMsg}
             </div>
           )}
 
@@ -133,6 +143,39 @@ export default function FinancePage() {
             </select>
             {(role === "BENDAHARA" || role === "KETUA") && (
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void financeApi
+                      .snapshot(periodId || undefined)
+                      .then(() => setOkMsg("Snapshot laporan disimpan"))
+                      .catch((e) =>
+                        setError(e instanceof Error ? e.message : "Gagal snapshot"),
+                      )
+                      .finally(() => setBusy(false));
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"
+                >
+                  Snapshot
+                </button>
+                <button
+                  type="button"
+                  disabled={exporting}
+                  onClick={() => {
+                    setExporting(true);
+                    void financeApi
+                      .downloadReportCsv(periodId || undefined)
+                      .catch((e) =>
+                        setError(e instanceof Error ? e.message : "CSV gagal"),
+                      )
+                      .finally(() => setExporting(false));
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"
+                >
+                  <Download size={16} /> CSV
+                </button>
                 <button
                   type="button"
                   disabled={previewing}
@@ -234,11 +277,17 @@ export default function FinancePage() {
                 className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
               <input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Kategori (Iuran, Donasi, ATK…)"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              />
+              <input
                 required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Keterangan"
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm sm:col-span-2"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
               <button
                 type="submit"
@@ -248,6 +297,19 @@ export default function FinancePage() {
                 Simpan
               </button>
             </form>
+          )}
+
+          {!!report?.byCategory?.length && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {report.byCategory.map((c) => (
+                <span
+                  key={c.category}
+                  className="rounded-full bg-slate-50 px-3 py-1 text-xs text-slate-600"
+                >
+                  {c.category}: {fmt(c.net)} ({c.count})
+                </span>
+              ))}
+            </div>
           )}
 
           <div className="rounded-2xl border border-brand-100 bg-white shadow-sm">
@@ -264,11 +326,15 @@ export default function FinancePage() {
                     <th className="px-5 py-3">Keterangan</th>
                     <th className="px-5 py-3">Oleh</th>
                     <th className="px-5 py-3 text-right">Jumlah</th>
+                    <th className="px-5 py-3" />
                   </tr>
                 </thead>
                 <tbody>
                   {tx.map((t) => (
-                    <tr key={t.id} className="border-t border-slate-50">
+                    <tr
+                      key={t.id}
+                      className={`border-t border-slate-50 ${t.voidedAt ? "opacity-40 line-through" : ""}`}
+                    >
                       <td className="px-5 py-3 text-slate-500">
                         {new Date(t.occurredAt).toLocaleDateString("id-ID")}
                       </td>
@@ -283,7 +349,14 @@ export default function FinancePage() {
                           {t.type}
                         </span>
                       </td>
-                      <td className="px-5 py-3 font-medium text-slate-800">{t.description}</td>
+                      <td className="px-5 py-3 font-medium text-slate-800">
+                        {t.category ? (
+                          <span className="mr-1 text-xs text-slate-400">
+                            [{t.category}]
+                          </span>
+                        ) : null}
+                        {t.description}
+                      </td>
                       <td className="px-5 py-3 text-slate-500">
                         {t.recordedBy?.fullName ?? "—"}
                       </td>
@@ -295,11 +368,36 @@ export default function FinancePage() {
                         {t.type === "EXPENSE" ? "−" : "+"}
                         {fmt(Number(t.amount))}
                       </td>
+                      <td className="px-5 py-3 text-right">
+                        {!t.voidedAt && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              if (!confirm("Void transaksi ini?")) return;
+                              setBusy(true);
+                              void financeApi
+                                .voidTx(t.id)
+                                .then(() => load(periodId || undefined))
+                                .then(() => setOkMsg("Transaksi di-void"))
+                                .catch((e) =>
+                                  setError(
+                                    e instanceof Error ? e.message : "Gagal void",
+                                  ),
+                                )
+                                .finally(() => setBusy(false));
+                            }}
+                            className="text-xs text-rose-500 hover:underline"
+                          >
+                            Void
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {!tx.length && (
                     <tr>
-                      <td colSpan={5} className="px-5 py-10 text-center text-slate-400">
+                      <td colSpan={6} className="px-5 py-10 text-center text-slate-400">
                         Belum ada transaksi
                       </td>
                     </tr>

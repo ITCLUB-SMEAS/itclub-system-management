@@ -66,4 +66,22 @@ export class MailService {
     ].join('\n');
     return this.send(to, subject, text);
   }
+
+  async sendWelcomeCredentials(
+    to: string,
+    username: string,
+    temporaryPassword: string,
+  ) {
+    const subject = 'ITCLUB — Akun anggota disetujui';
+    const text = [
+      'Selamat! Pendaftaran ITCLUB kamu disetujui.',
+      '',
+      `Username: ${username}`,
+      `Password sementara: ${temporaryPassword}`,
+      '',
+      'Segera login dan ganti password lewat menu lupa password / profil.',
+      'Jangan bagikan email ini.',
+    ].join('\n');
+    return this.send(to, subject, text);
+  }
 }

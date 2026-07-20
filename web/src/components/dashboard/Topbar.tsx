@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Bell, Search, CalendarDays } from "lucide-react";
-import { communicationApi, type AppNotification } from "../../lib/api";
+import {
+  communicationApi,
+  fetchAuthed,
+  type AppNotification,
+} from "../../lib/api";
 import DashLink from "../common/DashLink";
-
-const API_URL = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000/api/v1";
 
 export default function Topbar({
   title = "Dashboard",
@@ -36,13 +38,7 @@ export default function Topbar({
   }
 
   function downloadIcs() {
-    const token =
-      typeof localStorage !== "undefined"
-        ? localStorage.getItem("accessToken")
-        : null;
-    void fetch(`${API_URL}/integrations/calendar/sync.ics`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    void fetchAuthed("/integrations/calendar/sync.ics")
       .then(async (res) => {
         if (!res.ok) throw new Error("Gagal unduh kalender");
         const blob = await res.blob();

@@ -1,6 +1,7 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-ARG PUBLIC_API_URL=http://localhost:3000/api/v1
+# Same-origin relative URL so browser sends cookies to nginx → api proxy
+ARG PUBLIC_API_URL=/api/v1
 ARG PUBLIC_TURNSTILE_SITE_KEY=
 ENV PUBLIC_API_URL=$PUBLIC_API_URL
 ENV PUBLIC_TURNSTILE_SITE_KEY=$PUBLIC_TURNSTILE_SITE_KEY

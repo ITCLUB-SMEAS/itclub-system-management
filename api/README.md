@@ -14,11 +14,24 @@ podman run -d --name clubit-pg \
 # or: podman compose / docker compose up -d
 
 cp .env.example .env
+# Set JWT_SECRET + JWT_REFRESH_SECRET: openssl rand -hex 32  (each, different)
+
 npm install
 npx prisma migrate dev
 npx ts-node prisma/seed.ts
 npm run start:dev
 ```
+
+## Security
+
+- Pending / rejected / inactive members cannot login or refresh
+- Access JWT carries only `sub`; role/period reloaded from DB every request
+- Production refuses short/placeholder JWT secrets
+- `AuditLog` records auth, member approval, finance, recruitment, votes
+- Health: `GET /api/v1/health`
+- HttpOnly cookies: `clubit_access`, `clubit_refresh` (also set on login/refresh)
+- JWT accepted from cookie **or** `Authorization: Bearer` (mobile/API clients)
+- `GET /auth/me` — session bootstrap; `POST /auth/logout-cookie` clears cookies without access JWT
 
 ## Seed login
 

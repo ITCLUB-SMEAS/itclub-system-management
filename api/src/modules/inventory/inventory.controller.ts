@@ -8,9 +8,10 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { LoanStatus } from '@prisma/client';
+import { LoanStatus, RoleName } from '@prisma/client';
 import { InventoryService } from './inventory.service';
 import { CreateItemDto } from './dto/create-item.dto';
+import { LoanRequestDto } from './dto/loan-request.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -29,14 +30,21 @@ export class InventoryController {
 
   @Post('inventory')
   @Roles(...PENGURUS_ROLES)
-  createItem(@Body() dto: CreateItemDto) {
-    return this.inventory.createItem(dto);
+  createItem(
+    @Body() dto: CreateItemDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.inventory.createItem(dto, user.sub);
   }
 
   @Post('inventory/:id/loan-request')
-  loanRequest(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+  loanRequest(
+    @Param('id') id: string,
+    @Body() dto: LoanRequestDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
     if (!user.memberId) throw new BadRequestException('Member profile required');
-    return this.inventory.loanRequest(id, user.memberId);
+    return this.inventory.loanRequest(id, user.memberId, dto);
   }
 
   @Get('inventory-loans')
@@ -51,21 +59,33 @@ export class InventoryController {
     return this.inventory.myLoans(user.memberId);
   }
 
+  @Get('inventory-loans/overdue')
+  @Roles(...PENGURUS_ROLES)
+  overdue() {
+    return this.inventory.overdueLoans();
+  }
+
+  @Post('inventory-loans/overdue/notify')
+  @Roles(RoleName.KETUA, RoleName.SEKRETARIS, RoleName.WAKIL_KETUA)
+  notifyOverdue() {
+    return this.inventory.notifyOverdue();
+  }
+
   @Post('inventory-loans/:id/approve')
   @Roles(...PENGURUS_ROLES)
-  approveLoan(@Param('id') id: string) {
-    return this.inventory.approveLoan(id);
+  approveLoan(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.inventory.approveLoan(id, user.sub);
   }
 
   @Post('inventory-loans/:id/reject')
   @Roles(...PENGURUS_ROLES)
-  rejectLoan(@Param('id') id: string) {
-    return this.inventory.rejectLoan(id);
+  rejectLoan(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.inventory.rejectLoan(id, user.sub);
   }
 
   @Post('inventory-loans/:id/return')
   @Roles(...PENGURUS_ROLES)
-  returnLoan(@Param('id') id: string) {
-    return this.inventory.returnLoan(id);
+  returnLoan(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.inventory.returnLoan(id, user.sub);
   }
 }

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUrl, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUrl, Min, MinLength } from 'class-validator';
 
 export class CreateLearningResourceDto {
   @IsString()
@@ -8,8 +8,12 @@ export class CreateLearningResourceDto {
   @IsString()
   type!: string;
 
-  @IsUrl()
+  @IsUrl({ require_protocol: true })
   url!: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   @IsOptional()
   @IsString()
@@ -18,4 +22,9 @@ export class CreateLearningResourceDto {
   @IsOptional()
   @IsString()
   learningPathId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
 }

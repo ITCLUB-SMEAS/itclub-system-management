@@ -5,66 +5,113 @@ import {
   FolderKanban,
   Trophy,
   TrendingUp,
+  Package,
+  UserPlus,
 } from "lucide-react";
-import { membersApi, requireAuth, type Member } from "../../lib/api";
+import {
+  api,
+  membersApi,
+  requireAuth,
+  isPengurus,
+  type Member,
+} from "../../lib/api";
 import DashboardShell from "../common/DashboardShell";
 import DashLink from "../common/DashLink";
 import LoadingSpinner from "../common/LoadingSpinner";
 import EmptyState from "../common/EmptyState";
 
-const bars = [40, 55, 35, 70, 60, 85, 50, 75, 90, 65, 80, 95];
+type Overview = {
+  membersActive: number;
+  membersPending: number;
+  projectsCount: number;
+  tasksOpen: number;
+  activitiesUpcoming: number;
+  eventsUpcoming: number;
+  achievementsCount: number;
+  attendancesWeek: number;
+  loansActive: number;
+  loansOverdue: number;
+  recruitmentPending: number;
+  topDivisions: Array<{ divisionId: string; name: string; members: number }>;
+  attendanceSeries: Array<{ date: string; count: number }>;
+  generatedAt: string;
+};
 
 export default function DashboardHome() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [userLabel, setUserLabel] = useState("");
+  const [pengurus, setPengurus] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const u = requireAuth();
     setUserLabel(u.username);
-    membersApi
-      .list()
-      .then(setMembers)
+    setPengurus(isPengurus(u.role));
+    void Promise.all([
+      api<Overview>("/dashboard/overview"),
+      membersApi.list().catch(() => [] as Member[]),
+    ])
+      .then(([ov, mem]) => {
+        setOverview(ov);
+        setMembers(mem);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Gagal load"))
       .finally(() => setLoading(false));
   }, []);
 
-  const active = members.filter((m) => m.status === "ACTIVE").length;
-  const pending = members.filter((m) => m.approvalStatus === "PENDING").length;
+  const maxBar = Math.max(
+    1,
+    ...(overview?.attendanceSeries.map((d) => d.count) ?? [1]),
+  );
 
   const stats = [
     {
       label: "Anggota Aktif",
-      value: String(active || members.length || 0),
-      delta: "+2 periode ini",
+      value: String(overview?.membersActive ?? "—"),
+      delta: overview
+        ? `${overview.membersPending} pending`
+        : "loading",
       icon: Users,
       tint: "from-brand-50 to-white",
       iconBg: "bg-brand-100 text-brand-600",
+      href: "/dashboard/members",
     },
     {
-      label: "Pending Approval",
-      value: String(pending),
-      delta: "butuh review",
-      icon: CalendarCheck,
-      tint: "from-sky-50 to-white",
-      iconBg: "bg-sky-100 text-sky-600",
-    },
-    {
-      label: "Projects",
-      value: "—",
-      delta: "modul siap",
+      label: "Projects / Tasks",
+      value: String(overview?.projectsCount ?? "—"),
+      delta: overview ? `${overview.tasksOpen} open tasks` : "—",
       icon: FolderKanban,
       tint: "from-cyan-50 to-white",
       iconBg: "bg-cyan-100 text-cyan-600",
+      href: "/dashboard/projects",
+    },
+    {
+      label: "Kegiatan / Event",
+      value: String(
+        overview
+          ? overview.activitiesUpcoming + overview.eventsUpcoming
+          : "—",
+      ),
+      delta: overview
+        ? `${overview.activitiesUpcoming} kegiatan · ${overview.eventsUpcoming} event`
+        : "—",
+      icon: CalendarCheck,
+      tint: "from-sky-50 to-white",
+      iconBg: "bg-sky-100 text-sky-600",
+      href: "/dashboard/activities",
     },
     {
       label: "Prestasi",
-      value: "—",
-      delta: "tracking on",
+      value: String(overview?.achievementsCount ?? "—"),
+      delta: overview
+        ? `${overview.attendancesWeek} presensi 7h`
+        : "—",
       icon: Trophy,
       tint: "from-indigo-50 to-white",
       iconBg: "bg-indigo-100 text-indigo-600",
+      href: "/dashboard/events",
     },
   ];
 
@@ -80,7 +127,10 @@ export default function DashboardHome() {
             Halo, {userLabel || "Admin"}
           </h2>
           <p className="text-sm text-slate-500">
-            Ringkasan operasional ITCLUB hari ini
+            Ringkasan operasional ITCLUB
+            {overview?.generatedAt
+              ? ` · ${new Date(overview.generatedAt).toLocaleString("id-ID")}`
+              : ""}
           </p>
         </div>
       </div>
@@ -90,7 +140,7 @@ export default function DashboardHome() {
           className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
           role="alert"
         >
-          {error} — pastikan API jalan & role pengurus.
+          {error} — pastikan API jalan.
         </div>
       )}
 
@@ -102,12 +152,15 @@ export default function DashboardHome() {
             {stats.map((s) => {
               const Icon = s.icon;
               return (
-                <div
+                <DashLink
                   key={s.label}
-                  className={`rounded-2xl border border-brand-100/80 bg-gradient-to-br ${s.tint} p-5 shadow-sm`}
+                  href={s.href}
+                  className={`rounded-2xl border border-brand-100/80 bg-gradient-to-br ${s.tint} p-5 shadow-sm transition hover:shadow-md`}
                 >
                   <div className="mb-4 flex items-start justify-between">
-                    <p className="text-sm font-medium text-slate-500">{s.label}</p>
+                    <p className="text-sm font-medium text-slate-500">
+                      {s.label}
+                    </p>
                     <span className={`rounded-xl p-2 ${s.iconBg}`} aria-hidden>
                       <Icon size={18} />
                     </span>
@@ -119,7 +172,7 @@ export default function DashboardHome() {
                     <TrendingUp size={12} aria-hidden />
                     {s.delta}
                   </p>
-                </div>
+                </DashLink>
               );
             })}
           </div>
@@ -128,55 +181,102 @@ export default function DashboardHome() {
             <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm lg:col-span-2">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-slate-900">Activity Analytics</h3>
-                  <p className="text-xs text-slate-400">Kehadiran & kontribusi (demo chart)</p>
+                  <h3 className="font-semibold text-slate-900">
+                    Presensi 7 hari
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Check-in per hari (real data)
+                  </p>
                 </div>
+                <p className="text-sm font-semibold text-slate-700">
+                  {overview?.attendancesWeek ?? 0}
+                  <span className="ml-1 text-sm font-normal text-slate-400">
+                    total
+                  </span>
+                </p>
               </div>
-              <div className="relative h-56" aria-hidden>
-                <svg viewBox="0 0 400 160" className="h-full w-full" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b93f6" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#3b93f6" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d="M0,120 C40,100 70,130 100,90 C130,50 160,70 200,55 C240,40 270,80 300,60 C330,40 360,50 400,30 L400,160 L0,160 Z"
-                    fill="url(#g1)"
-                  />
-                  <path
-                    d="M0,120 C40,100 70,130 100,90 C130,50 160,70 200,55 C240,40 270,80 300,60 C330,40 360,50 400,30"
-                    fill="none"
-                    stroke="#3b93f6"
-                    strokeWidth="2.5"
-                  />
-                </svg>
+              <div className="flex h-28 items-end gap-2" aria-hidden>
+                {(overview?.attendanceSeries ?? []).map((d) => (
+                  <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+                    <div
+                      className="w-full rounded-t bg-brand-500/80"
+                      style={{
+                        height: `${Math.max(8, (d.count / maxBar) * 100)}%`,
+                        minHeight: d.count ? 8 : 2,
+                      }}
+                      title={`${d.date}: ${d.count}`}
+                    />
+                    <span className="text-[9px] text-slate-400">
+                      {d.date.slice(8)}
+                    </span>
+                  </div>
+                ))}
+                {!overview?.attendanceSeries?.length && (
+                  <p className="w-full py-8 text-center text-sm text-slate-400">
+                    Belum ada data presensi
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-900">Top Divisi</h3>
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center gap-2 text-slate-700">
+                  <Package size={16} className="text-brand-600" />
+                  <h3 className="text-sm font-semibold">Inventaris</h3>
+                </div>
+                <p className="text-2xl font-bold text-slate-900">
+                  {overview?.loansActive ?? 0}
+                </p>
+                <p className="text-xs text-slate-400">
+                  pinjaman aktif
+                  {overview && overview.loansOverdue > 0
+                    ? ` · ${overview.loansOverdue} overdue`
+                    : ""}
+                </p>
                 <DashLink
-                  href="/dashboard/members"
-                  className="text-xs font-medium text-brand-600 hover:underline"
+                  href="/dashboard/inventory"
+                  className="mt-2 inline-block text-xs font-medium text-brand-600 hover:underline"
                 >
-                  See Details
+                  Kelola →
                 </DashLink>
               </div>
-              <p className="text-2xl font-semibold text-slate-900">
-                {members.length}
-                <span className="ml-1 text-sm font-normal text-slate-400">members</span>
-              </p>
-              <div className="mt-4 flex h-16 items-end gap-1" aria-hidden>
-                {bars.map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-t bg-brand-400/80"
-                    style={{ height: `${h}%`, opacity: 0.4 + (i % 5) * 0.12 }}
-                  />
-                ))}
+              <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center gap-2 text-slate-700">
+                  <UserPlus size={16} className="text-brand-600" />
+                  <h3 className="text-sm font-semibold">Rekrutmen</h3>
+                </div>
+                <p className="text-2xl font-bold text-slate-900">
+                  {overview?.recruitmentPending ?? 0}
+                </p>
+                <p className="text-xs text-slate-400">aplikasi pending</p>
+                {pengurus && (
+                  <DashLink
+                    href="/dashboard/recruitment"
+                    className="mt-2 inline-block text-xs font-medium text-brand-600 hover:underline"
+                  >
+                    Review →
+                  </DashLink>
+                )}
               </div>
+              {!!overview?.topDivisions?.length && (
+                <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-700">
+                    Divisi (periode aktif)
+                  </h3>
+                  <ul className="space-y-1">
+                    {overview.topDivisions.map((d) => (
+                      <li
+                        key={d.divisionId}
+                        className="flex justify-between text-xs text-slate-600"
+                      >
+                        <span>{d.name}</span>
+                        <span className="font-semibold">{d.members}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 
@@ -187,60 +287,36 @@ export default function DashboardHome() {
                 href="/dashboard/members"
                 className="rounded-full bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
               >
-                View All
+                Lihat semua
               </DashLink>
             </div>
             {!members.length ? (
-              <div className="p-6">
-                <EmptyState
-                  title="Belum ada data anggota"
-                  description="Anggota akan muncul setelah registrasi & approval."
-                  action={{
-                    label: "Buka Members",
-                    onClick: () => {
-                      window.history.pushState({}, "", "/dashboard/members");
-                      window.dispatchEvent(new PopStateEvent("popstate"));
-                    },
-                  }}
-                />
-              </div>
+              <EmptyState
+                title="Belum ada data anggota"
+                description="Daftar anggota muncul setelah load API."
+              />
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-sm">
-                  <caption className="sr-only">Daftar anggota terbaru</caption>
+                <table className="w-full min-w-[520px] text-left text-sm">
                   <thead className="bg-slate-50/80 text-xs uppercase tracking-wide text-slate-400">
                     <tr>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Name
-                      </th>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Class
-                      </th>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Email
-                      </th>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Status
-                      </th>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Approval
-                      </th>
+                      <th className="px-5 py-3">Nama</th>
+                      <th className="px-5 py-3">Kelas</th>
+                      <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3">Approval</th>
                     </tr>
                   </thead>
                   <tbody>
                     {members.slice(0, 8).map((m) => (
-                      <tr key={m.id} className="border-t border-slate-50 hover:bg-brand-50/40">
+                      <tr key={m.id} className="border-t border-slate-50">
                         <td className="px-5 py-3 font-medium text-slate-800">
                           {m.fullName}
                         </td>
                         <td className="px-5 py-3 text-slate-500">
                           {m.className ?? "—"}
                         </td>
-                        <td className="px-5 py-3 text-slate-500">
-                          {m.user?.email ?? "—"}
-                        </td>
                         <td className="px-5 py-3">
-                          <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+                          <span className="rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                             {m.status}
                           </span>
                         </td>

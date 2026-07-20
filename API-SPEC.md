@@ -39,43 +39,62 @@ Base URL: `/api/v1`
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
 | GET | /activities | List jadwal kegiatan | Authenticated |
-| POST | /activities | Buat jadwal kegiatan | Pengurus |
-| POST | /attendances/check-in | Presensi via QR scan / manual | Authenticated |
+| GET | /activities/:id | Detail kegiatan | Authenticated |
+| POST | /activities | Buat jadwal (opsional lat/lng + geofenceRadiusM) | Pengurus |
+| POST | /activities/:id/rotate-qr | Rotate QR token + set TTL (default 15m) | Pengurus |
+| POST | /activities/reminders/run | Kirim notif H-1 (window 20–28 jam) | Ketua/Sekretaris/Wakil |
+| POST | /attendances/check-in | Presensi QR/manual; GPS wajib jika geofence | Authenticated |
 | GET | /attendances/me | Riwayat kehadiran sendiri | Authenticated |
+| GET | /attendances/report?memberId= | Rekap rate per anggota (self atau Pengurus) | Authenticated |
 | GET | /activities/:id/attendances | Rekap kehadiran per kegiatan | Pengurus |
 
 ## 3. Manajemen Project & Tugas (`/projects`, `/tasks`, `/submissions`, `/mentor-assignments`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| GET | /projects | List project | Authenticated |
+| GET | /projects | List project (+ task count) | Authenticated |
+| GET | /projects/:id | Detail project + tasks | Authenticated |
 | POST | /projects | Buat project baru | Pengurus, Kepala Divisi |
-| GET | /projects/:id/tasks | List tugas dalam project | Authenticated |
-| POST | /tasks | Buat tugas baru | Pengurus, Kepala Divisi |
-| PATCH | /tasks/:id/status | Update status kanban (todo/in-progress/review/done) | Assignee, Pengurus |
-| POST | /tasks/:id/assign | Assign tugas ke anggota | Pengurus, Kepala Divisi |
-| POST | /tasks/:id/submissions | Submit tugas (repo/file/demo link) | Assignee |
-| GET | /submissions/:id | Detail submission | Authenticated |
-| POST | /submissions/:id/feedback | Beri feedback ke submission | Pengurus, Mentor |
-| POST | /mentor-assignments | Pasangkan mentor-mentee | Kepala Divisi |
-| GET | /mentor-assignments/me | Lihat mentor/mentee sendiri | Authenticated |
+| GET | /projects/:id/tasks | List tugas (`?assigneeId=&status=`) | Authenticated |
+| GET | /tasks/me | Tugas di-assign ke saya | Authenticated |
+| POST | /tasks | Buat tugas (+ dueDate, notif assignee) | Pengurus, Kepala Divisi |
+| GET | /tasks/:id/submissions | List submission per task | Authenticated |
+| PATCH | /tasks/:id/status | Kanban; assignee ±1 kolom, pengurus free | Assignee, Pengurus |
+| POST | /tasks/:id/assign | Assign + notifikasi | Pengurus, Kepala Divisi |
+| POST | /tasks/:id/submissions | Submit (min 1 URL) → auto REVIEW | Assignee |
+| GET | /submissions/:id | Detail submission + feedback | Authenticated |
+| POST | /submissions/:id/feedback | Feedback | Pengurus **atau** mentor mentee |
+| POST | /mentor-assignments | Pair mentor-mentee | Pengurus, Kepala Divisi |
+| GET | /mentor-assignments/me | Pairing saya | Authenticated |
+| POST | /tasks/reminders/deadlines | Notif tugas due &lt;24h | Ketua/Sekretaris/Wakil |
 
 ## 4. Event, Kompetisi & Prestasi (`/events`, `/gallery`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| GET | /events | List event/lomba/workshop | Authenticated |
-| POST | /events | Buat event baru | Pengurus |
-| POST | /events/:id/register | Daftar ke event | Authenticated |
-| GET | /events/:id/registrations | List pendaftar event | Pengurus |
-| POST | /events/:id/achievements | Catat hasil/prestasi lomba | Pengurus |
-| POST | /events/:id/gallery | Upload dokumentasi kegiatan | Pengurus |
-| GET | /gallery | List galeri dokumentasi | Authenticated |
+| GET | /events | List (`?type=&upcoming=true\|false`) + counts | Authenticated |
+| GET | /events/:id | Detail + prestasi + galeri preview | Authenticated |
+| POST | /events | Buat event (location, capacity, registrationOpen) | Pengurus |
+| POST | /events/reminders/run | H-1 notif (approved regs / all active) | Ketua/Sekretaris/Wakil |
+| GET | /events/me/registrations | Pendaftaran saya | Authenticated |
+| POST | /events/:id/register | Daftar (PENDING; cek kuota + open) | Authenticated |
+| DELETE | /events/:id/register | Batalkan pendaftaran | Authenticated |
+| GET | /events/:id/registrations | List pendaftar | Pengurus |
+| PATCH | /events/:eventId/registrations/:regId | Approve/reject + notif | Pengurus |
+| POST | /events/:id/achievements | Catat prestasi (+ notif anggota) | Pengurus |
+| GET | /achievements | List prestasi (`?memberId=&eventId=`) | Authenticated |
+| POST | /events/:id/gallery | Tambah foto (imageUrl) | Pengurus |
+| GET | /gallery | Galeri (`?eventId=`) | Authenticated |
 
 ## 5. Keuangan Kas Ekskul (`/transactions`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| GET | /transactions | List transaksi kas | Bendahara, Ketua |
-| POST | /transactions | Catat transaksi masuk/keluar | Bendahara |
-| GET | /transactions/report?periodId= | Laporan keuangan per periode | Bendahara, Ketua |
+| GET | /transactions | List (`?periodId=&includeVoided=`) | Bendahara, Ketua |
+| POST | /transactions | Catat (amount, category, description) | Bendahara, Ketua |
+| POST | /transactions/:id/void | Soft-void transaksi | Bendahara, Ketua |
+| GET | /transactions/report | Agregat + byCategory | Bendahara, Ketua |
+| POST | /transactions/report/snapshot | Snapshot `FinancialReport` | Bendahara, Ketua |
+| GET | /transactions/report/snapshots | Histori snapshot | Bendahara, Ketua |
+| GET | /transactions/report.csv | Export CSV | Bendahara, Ketua |
+| GET | /transactions/report.pdf | Export PDF | Bendahara, Ketua |
 
 ## 6. Komunikasi & Notifikasi (`/announcements`, `/notifications`)
 | Method | Path | Deskripsi | Role |
@@ -88,41 +107,68 @@ Base URL: `/api/v1`
 ## 7. Achievement & Gamifikasi (`/badges`, `/certificates`, `/leaderboard`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| GET | /badges | List badge yang tersedia | Authenticated |
-| POST | /badges | Buat badge baru | Ketua |
-| POST | /members/:id/badges | Award badge ke anggota | Pengurus |
-| GET | /leaderboard | Leaderboard divisi/individu | Authenticated |
-| POST | /certificates/generate | Generate sertifikat digital (PDF) | Pengurus |
-| GET | /members/:id/certificates | List sertifikat milik anggota | Authenticated |
+| GET | /badges | List badge | Authenticated |
+| POST | /badges | Buat badge | Ketua |
+| POST | /members/:id/badges | Award badge | Pengurus |
+| GET | /leaderboard | Leaderboard poin | Authenticated |
+| GET | /gamification/me | Poin, rank, badge, sertifikat saya | Authenticated |
+| POST | /gamification/evaluate/me | Auto milestone badge | Authenticated |
+| POST | /gamification/evaluate/:memberId | Auto milestone (pengurus) | Pengurus |
+| POST | /certificates/generate | Buat record sertifikat | Pengurus |
+| GET | /certificates/:id/pdf | Unduh PDF sertifikat | Authenticated |
+| GET | /members/:id/certificates | List sertifikat anggota | Authenticated |
 
 ## 8. Auth & RBAC
 Sudah tercakup di section **Auth** di atas, ditambah guard `RolesGuard` yang mengecek role dari `MemberPeriod.role` pada tiap request.
 
+## Dashboard
+| Method | Path | Deskripsi | Role |
+|---|---|---|---|
+| GET | /dashboard/overview | Stats real (members, projects, events, attendance 7h, loans, recruitment) | Authenticated |
+
 ## 9. Learning & Knowledge Base (`/learning-resources`, `/learning-paths`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| GET | /learning-paths | List learning path per divisi/level | Authenticated |
-| POST | /learning-paths | Buat learning path baru | Kepala Divisi |
-| GET | /learning-resources?divisionId=&pathId= | List materi belajar | Authenticated |
-| POST | /learning-resources | Upload/tambah materi belajar | Kepala Divisi, Pengurus |
-| GET | /learning-resources/:id/download | Signed URL untuk download/offline cache (mobile) | Authenticated |
+| GET | /learning-paths | List path (`?divisionId=`) + resource count | Authenticated |
+| GET | /learning-paths/:id | Detail path + progress per resource | Authenticated |
+| POST | /learning-paths | Buat path | Pengurus, Kepala Divisi |
+| GET | /learning-resources | List materi (`?divisionId=&pathId=`) | Authenticated |
+| POST | /learning-resources | Tambah materi (URL) | Pengurus, Kepala Divisi |
+| GET | /learning-resources/:id/download | URL download | Authenticated |
+| POST | /learning-resources/:id/complete | Tandai selesai | Authenticated |
+| DELETE | /learning-resources/:id/complete | Unmark selesai | Authenticated |
+| GET | /learning/progress/me | Riwayat progress saya | Authenticated |
+| GET | /learning/progress/summary | % progress per path | Authenticated |
 
 ## 10. Rekrutmen Anggota Baru (`/recruitment`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| POST | /recruitment/apply | Form pendaftaran calon anggota | Public |
-| GET | /recruitment | List pendaftar (calon anggota) | Pengurus |
-| POST | /recruitment/:id/approve | Approve pendaftar, buat akun anggota | Pengurus |
-| POST | /recruitment/:id/reject | Reject pendaftar | Pengurus |
+| POST | /recruitment/apply | Form (minat divisi, multi-stage FORM) | Public |
+| GET | /recruitment | List (`?status=&stage=`) | Pengurus |
+| GET | /recruitment/stats | Agregat stage/status | Pengurus |
+| GET | /recruitment/:id | Detail + onboarding | Pengurus |
+| PATCH | /recruitment/:id/stage | Set stage FORM→TEST→INTERVIEW→ANNOUNCEMENT | Pengurus |
+| POST | /recruitment/:id/advance | Maju 1 tahap | Pengurus |
+| PATCH | /recruitment/:id/onboarding | Update checklist onboarding | Pengurus |
+| POST | /recruitment/:id/approve | Approve + buat akun + email | Pengurus |
+| POST | /recruitment/:id/reject | Reject | Pengurus |
 
 ## 11. Pemilu & Voting Internal (`/elections`, `/polls`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| GET | /elections | List pemilu | Authenticated |
-| POST | /elections | Buat pemilu baru | Ketua |
+| GET | /elections | List pemilu + candidate counts | Authenticated |
+| GET | /elections/:id | Detail (tanpa vote counts publik) | Authenticated |
+| POST | /elections | Buat (description, endsAt) | Ketua |
+| PATCH | /elections/:id/status | DRAFT/OPEN/CLOSED | Ketua |
 | POST | /elections/:id/candidates | Tambah kandidat | Ketua |
-| POST | /elections/:id/vote | Voting | Authenticated |
-| GET | /elections/:id/results | Hasil pemilu | Pengurus |
+| POST | /elections/:id/vote | Voting (1x; cek endsAt) | Authenticated |
+| GET | /elections/:id/voted | Apakah saya sudah vote | Authenticated |
+| GET | /elections/:id/results | Hasil (CLOSED; pengurus boleh open) | Authenticated |
+| GET | /polls | List poll | Authenticated |
+| POST | /polls | Buat poll | Pengurus |
+| POST | /polls/:id/close | Tutup poll | Pengurus |
+| GET | /polls/:id | Detail + opsi | Authenticated |
+| POST | /polls/:id/vote | Vote poll | Authenticated |
 | GET | /polls | List polling internal | Authenticated |
 | POST | /polls | Buat polling baru | Pengurus |
 | POST | /polls/:id/vote | Vote polling | Authenticated |
@@ -130,11 +176,16 @@ Sudah tercakup di section **Auth** di atas, ditambah guard `RolesGuard` yang men
 ## 12. Peminjaman Inventaris (`/inventory`, `/inventory-loans`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| GET | /inventory | List aset ekskul | Authenticated |
-| POST | /inventory | Tambah aset baru | Pengurus |
-| POST | /inventory/:id/loan-request | Ajukan peminjaman | Authenticated |
-| POST | /inventory-loans/:id/approve | Approve peminjaman | Pengurus |
-| POST | /inventory-loans/:id/return | Catat pengembalian barang | Pengurus |
+| GET | /inventory | List aset (qty + active loans) | Authenticated |
+| POST | /inventory | Tambah aset (quantity, serial) | Pengurus |
+| POST | /inventory/:id/loan-request | Ajukan (dueDate, notes) | Authenticated |
+| GET | /inventory-loans | List loans (`?status=`) | Pengurus |
+| GET | /inventory-loans/me | Pinjaman saya | Authenticated |
+| GET | /inventory-loans/overdue | Overdue BORROWED | Pengurus |
+| POST | /inventory-loans/overdue/notify | Notif overdue | Ketua/Sekretaris/Wakil |
+| POST | /inventory-loans/:id/approve | Approve → BORROWED + notif | Pengurus |
+| POST | /inventory-loans/:id/reject | Reject + notif | Pengurus |
+| POST | /inventory-loans/:id/return | Kembalikan | Pengurus |
 
 ## 13. Portfolio Publik Otomatis (`/portfolio`)
 | Method | Path | Deskripsi | Role |
@@ -145,9 +196,10 @@ Sudah tercakup di section **Auth** di atas, ditambah guard `RolesGuard` yang men
 ## 14. Integrasi Eksternal (`/integrations`)
 | Method | Path | Deskripsi | Role |
 |---|---|---|---|
-| POST | /integrations/github/webhook | Terima event commit dari repo yang di-submit | Service (webhook secret) |
-| POST | /integrations/discord/notify | Trigger notifikasi ke bot Discord/WhatsApp | Internal service |
-| GET | /integrations/calendar/sync.ics | Export kalender kegiatan (format iCal) | Authenticated |
+| GET | /integrations/status | Status GitHub/Discord/ICS config | Pengurus |
+| POST | /integrations/github/webhook | Commit activity → submission count | Public + HMAC secret |
+| POST | /integrations/discord/notify | Notifikasi Discord (stub jika no URL) | Pengurus |
+| GET | /integrations/calendar/sync.ics | Export ICS (activity + event, H-1 alarm) | Authenticated |
 
 ## 15. Evaluasi & Feedback (`/evaluations`, `/peer-reviews`)
 | Method | Path | Deskripsi | Role |

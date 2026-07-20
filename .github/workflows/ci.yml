@@ -14,13 +14,13 @@ concurrency:
 env:
   NODE_VERSION: "22"
   DATABASE_URL: postgresql://clubit:clubit@localhost:5432/clubit?schema=public
-  JWT_SECRET: ci-test-jwt-secret-not-for-production
-  JWT_REFRESH_SECRET: ci-test-refresh-secret-not-for-production
+  JWT_SECRET: ci-only-jwt-secret-key-32chars-min-abcdefgh
+  JWT_REFRESH_SECRET: ci-only-refresh-secret-key-32chars-min-xyz
   JWT_EXPIRES_IN: 15m
   JWT_REFRESH_EXPIRES_IN: 7d
   NODE_ENV: test
   CORS_ORIGINS: http://localhost:4321
-  PUBLIC_API_URL: http://localhost:3000/api/v1
+  PUBLIC_API_URL: /api/v1
 
 jobs:
   api:
@@ -178,6 +178,6 @@ jobs:
           push: false
           tags: clubit-web:ci
           build-args: |
-            PUBLIC_API_URL=http://localhost:3000/api/v1
+            PUBLIC_API_URL=/api/v1
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web

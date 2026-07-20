@@ -25,17 +25,17 @@ export class MembersController {
 
   @Get()
   findAll(
+    @CurrentUser() user: JwtPayload,
     @Query('status') status?: MemberStatus,
     @Query('divisionId') divisionId?: string,
     @Query('periodId') periodId?: string,
   ) {
-    // all authenticated — peer review / assign need directory
-    return this.members.findAll({ status, divisionId, periodId });
+    return this.members.findAll({ status, divisionId, periodId }, user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.members.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.members.findOne(id, user);
   }
 
   @Patch(':id')
@@ -49,26 +49,34 @@ export class MembersController {
 
   @Post(':id/approve')
   @Roles(RoleName.KETUA, RoleName.SEKRETARIS)
-  approve(@Param('id') id: string) {
-    return this.members.approve(id);
+  approve(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.members.approve(id, user.sub);
   }
 
   @Post(':id/reject')
   @Roles(RoleName.KETUA, RoleName.SEKRETARIS)
-  reject(@Param('id') id: string) {
-    return this.members.reject(id);
+  reject(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.members.reject(id, user.sub);
   }
 
   @Post(':id/assign-division')
   @Roles(RoleName.KETUA, RoleName.KEPALA_DIVISI)
-  assignDivision(@Param('id') id: string, @Body() dto: AssignDivisionDto) {
-    return this.members.assignDivision(id, dto);
+  assignDivision(
+    @Param('id') id: string,
+    @Body() dto: AssignDivisionDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.members.assignDivision(id, dto, user.sub);
   }
 
   @Post(':id/badges')
   @Roles(...PENGURUS_ROLES)
-  awardBadge(@Param('id') id: string, @Body('badgeId') badgeId: string) {
-    return this.members.awardBadge(id, badgeId);
+  awardBadge(
+    @Param('id') id: string,
+    @Body('badgeId') badgeId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.members.awardBadge(id, badgeId, user.sub);
   }
 
   @Get(':id/certificates')

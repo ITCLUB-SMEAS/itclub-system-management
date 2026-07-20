@@ -29,12 +29,21 @@ function statusStyle(s: string) {
 }
 
 function itemAvailability(item: InventoryItem) {
-  const active = item.loans?.find((l) =>
-    ["REQUESTED", "APPROVED", "BORROWED"].includes(l.status),
-  );
-  if (!active) return { label: "Available", ok: true };
-  if (active.status === "REQUESTED")
-    return { label: "Pending request", ok: false };
+  const activeCount =
+    item._count?.loans ??
+    item.loans?.filter((l) =>
+      ["REQUESTED", "APPROVED", "BORROWED"].includes(l.status),
+    ).length ??
+    0;
+  const qty = item.quantity ?? 1;
+  if (activeCount < qty) {
+    return {
+      label: `Available (${qty - activeCount}/${qty})`,
+      ok: true,
+    };
+  }
+  const pending = item.loans?.some((l) => l.status === "REQUESTED");
+  if (pending) return { label: "Pending / full", ok: false };
   return { label: "Borrowed", ok: false };
 }
 
@@ -51,6 +60,8 @@ export default function InventoryPage() {
   const [tab, setTab] = useState<"items" | "requests" | "mine">("items");
   const [name, setName] = useState("");
   const [condition, setCondition] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [overdue, setOverdue] = useState<InventoryLoan[]>([]);
 
   async function load() {
     const [i, mine] = await Promise.all([
@@ -63,7 +74,12 @@ export default function InventoryPage() {
 
   async function loadLoans() {
     if (!pengurus) return;
-    setLoans(await inventoryApi.loans());
+    const [all, od] = await Promise.all([
+      inventoryApi.loans(),
+      inventoryApi.overdue().catch(() => [] as InventoryLoan[]),
+    ]);
+    setLoans(all);
+    setOverdue(od);
   }
 
   useEffect(() => {
@@ -97,9 +113,11 @@ export default function InventoryPage() {
       await inventoryApi.create({
         name,
         condition: condition || undefined,
+        quantity: Number(quantity) || 1,
       });
       setName("");
       setCondition("");
+      setQuantity("1");
       setShowForm(false);
       toast.success("Aset ditambahkan");
       await load();
@@ -116,8 +134,9 @@ export default function InventoryPage() {
     setBusy(true);
     setError("");
     try {
-      await inventoryApi.requestLoan(itemId);
-      toast.success("Permintaan pinjam terkirim");
+      const due = new Date(Date.now() + 7 * 86_400_000).toISOString();
+      await inventoryApi.requestLoan(itemId, { dueDate: due });
+      toast.success("Permintaan pinjam terkirim (due 7 hari)");
       await load();
       if (pengurus) await loadLoans();
     } catch (err) {
@@ -230,7 +249,7 @@ export default function InventoryPage() {
           {showForm && (
             <form
               onSubmit={createItem}
-              className="mb-4 grid gap-2 rounded-2xl border border-brand-100 bg-white p-4 sm:grid-cols-3"
+              className="mb-4 grid gap-2 rounded-2xl border border-brand-100 bg-white p-4 sm:grid-cols-4"
             >
               <input
                 required
@@ -245,14 +264,51 @@ export default function InventoryPage() {
                 placeholder="Kondisi"
                 className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
               />
+              <input
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="Qty"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              />
               <button
                 type="submit"
                 disabled={busy}
-                className="rounded-full bg-brand-600 py-2 text-sm font-medium text-white sm:col-span-3"
+                className="rounded-full bg-brand-600 py-2 text-sm font-medium text-white sm:col-span-4"
               >
                 Simpan
               </button>
             </form>
+          )}
+
+          {pengurus && overdue.length > 0 && (
+            <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>{overdue.length} peminjaman overdue</span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void inventoryApi
+                      .notifyOverdue()
+                      .then((r) =>
+                        toast.success(`Notif overdue: ${r.sent}`),
+                      )
+                      .catch((e) =>
+                        toast.error(
+                          e instanceof Error ? e.message : "Gagal",
+                        ),
+                      )
+                      .finally(() => setBusy(false));
+                  }}
+                  className="rounded-full bg-rose-600 px-3 py-1 text-xs font-medium text-white"
+                >
+                  Kirim notif
+                </button>
+              </div>
+            </div>
           )}
 
           {tab === "items" && (

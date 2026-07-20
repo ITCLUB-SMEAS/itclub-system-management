@@ -25,10 +25,22 @@ describe('IntegrationsService', () => {
   });
 
   describe('verifyGithubSignature', () => {
-    it('skips when secret not configured', () => {
-      expect(svc().verifyGithubSignature(Buffer.from('{}'), undefined)).toBe(
-        true,
-      );
+    it('skips when secret not configured (non-production)', () => {
+      expect(
+        svc({ NODE_ENV: 'test' }).verifyGithubSignature(
+          Buffer.from('{}'),
+          undefined,
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects missing secret in production', () => {
+      expect(() =>
+        svc({ NODE_ENV: 'production' }).verifyGithubSignature(
+          Buffer.from('{}'),
+          undefined,
+        ),
+      ).toThrow(UnauthorizedException);
     });
 
     it('accepts valid hmac', () => {

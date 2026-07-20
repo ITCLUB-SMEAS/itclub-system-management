@@ -20,8 +20,12 @@ export class IntegrationsService {
   verifyGithubSignature(rawBody: Buffer | string | undefined, signature?: string) {
     const secret = this.config.get<string>('GITHUB_WEBHOOK_SECRET');
     if (!secret) {
-      // dev: allow without secret
-      this.log.debug('GITHUB_WEBHOOK_SECRET not set — skip signature check');
+      if (this.config.get('NODE_ENV') === 'production') {
+        throw new UnauthorizedException(
+          'GITHUB_WEBHOOK_SECRET required in production',
+        );
+      }
+      this.log.warn('GITHUB_WEBHOOK_SECRET not set — skip signature check (dev only)');
       return true;
     }
     if (!signature?.startsWith('sha256=') || !rawBody) {
@@ -144,12 +148,44 @@ export class IntegrationsService {
     };
   }
 
+  status() {
+    const github = !!this.config.get<string>('GITHUB_WEBHOOK_SECRET');
+    const discord = !!this.config.get<string>('DISCORD_WEBHOOK_URL');
+    return {
+      github: {
+        configured: github,
+        webhookPath: '/api/v1/integrations/github/webhook',
+        requiredInProduction: true,
+      },
+      discord: {
+        configured: discord,
+        stubWhenMissing: true,
+      },
+      calendar: {
+        icsPath: '/api/v1/integrations/calendar/sync.ics',
+        googleCalendar: {
+          // ponytail: OAuth sync when Google Calendar credentials added
+          supported: false,
+          note: 'Gunakan import .ics ke Google Calendar / Apple Calendar',
+        },
+      },
+      whatsapp: {
+        // ponytail: WA Business API when needed
+        supported: false,
+        note: 'Gunakan Discord webhook sebagai channel notifikasi',
+      },
+    };
+  }
+
   async calendarIcs() {
     const now = new Date();
+    const from = new Date(now.getTime() - 30 * 86_400_000);
     const activities = await this.prisma.activity.findMany({
+      where: { startTime: { gte: from } },
       orderBy: { startTime: 'asc' },
     });
     const events = await this.prisma.event.findMany({
+      where: { startDate: { gte: from } },
       orderBy: { startDate: 'asc' },
     });
 
@@ -194,6 +230,7 @@ export class IntegrationsService {
       if (e.endDate) lines.push(`DTEND:${this.toIcsDate(e.endDate)}`);
       lines.push(`SUMMARY:${this.escape(`[${e.type}] ${e.title}`)}`);
       if (e.description) lines.push(`DESCRIPTION:${this.escape(e.description)}`);
+      if (e.location) lines.push(`LOCATION:${this.escape(e.location)}`);
       lines.push(
         'BEGIN:VALARM',
         'TRIGGER:-PT24H',

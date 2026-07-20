@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { MailModule } from './common/mail/mail.module';
 import { TurnstileModule } from './common/turnstile/turnstile.module';
+import { AuditModule } from './common/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MembersModule } from './modules/members/members.module';
 import { DivisionsModule } from './modules/divisions/divisions.module';
@@ -22,6 +23,9 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { EvaluationModule } from './modules/evaluation/evaluation.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { JobsModule } from './modules/jobs/jobs.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -45,6 +49,7 @@ import { EvaluationModule } from './modules/evaluation/evaluation.module';
     PrismaModule,
     MailModule,
     TurnstileModule,
+    AuditModule,
     AuthModule,
     MembersModule,
     DivisionsModule,
@@ -62,7 +67,10 @@ import { EvaluationModule } from './modules/evaluation/evaluation.module';
     PortfolioModule,
     IntegrationsModule,
     EvaluationModule,
+    DashboardModule,
+    JobsModule,
   ],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_GUARD,

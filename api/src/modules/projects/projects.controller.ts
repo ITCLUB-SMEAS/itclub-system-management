@@ -6,9 +6,10 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { RoleName } from '@prisma/client';
+import { RoleName, TaskStatus } from '@prisma/client';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -35,19 +36,39 @@ export class ProjectsController {
 
   @Post('projects')
   @Roles(...PENGURUS_ROLES, RoleName.KEPALA_DIVISI)
-  create(@Body() dto: CreateProjectDto) {
-    return this.projects.create(dto);
+  create(@Body() dto: CreateProjectDto, @CurrentUser() user: JwtPayload) {
+    return this.projects.create(dto, user.sub);
+  }
+
+  @Get('projects/:id')
+  findOne(@Param('id') id: string) {
+    return this.projects.findOne(id);
   }
 
   @Get('projects/:id/tasks')
-  listTasks(@Param('id') id: string) {
-    return this.projects.listTasks(id);
+  listTasks(
+    @Param('id') id: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('status') status?: TaskStatus,
+  ) {
+    return this.projects.listTasks(id, { assigneeId, status });
+  }
+
+  @Get('tasks/me')
+  myTasks(@CurrentUser() user: JwtPayload) {
+    if (!user.memberId) throw new BadRequestException('Member profile required');
+    return this.projects.myTasks(user.memberId);
   }
 
   @Post('tasks')
   @Roles(...PENGURUS_ROLES, RoleName.KEPALA_DIVISI)
-  createTask(@Body() dto: CreateTaskDto) {
-    return this.projects.createTask(dto);
+  createTask(@Body() dto: CreateTaskDto, @CurrentUser() user: JwtPayload) {
+    return this.projects.createTask(dto, user.sub);
+  }
+
+  @Get('tasks/:id/submissions')
+  listTaskSubmissions(@Param('id') id: string) {
+    return this.projects.listTaskSubmissions(id);
   }
 
   @Patch('tasks/:id/status')
@@ -61,8 +82,12 @@ export class ProjectsController {
 
   @Post('tasks/:id/assign')
   @Roles(...PENGURUS_ROLES, RoleName.KEPALA_DIVISI)
-  assign(@Param('id') id: string, @Body() dto: AssignTaskDto) {
-    return this.projects.assign(id, dto);
+  assign(
+    @Param('id') id: string,
+    @Body() dto: AssignTaskDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.projects.assign(id, dto, user.sub);
   }
 
   @Post('tasks/:id/submissions')
@@ -81,25 +106,33 @@ export class ProjectsController {
   }
 
   @Post('submissions/:id/feedback')
-  @Roles(...PENGURUS_ROLES)
   feedback(
     @Param('id') id: string,
     @Body() dto: CreateFeedbackDto,
     @CurrentUser() user: JwtPayload,
   ) {
     if (!user.memberId) throw new BadRequestException('Member profile required');
-    return this.projects.addFeedback(id, user.memberId, dto);
+    return this.projects.addFeedback(id, user.memberId, dto, user);
   }
 
   @Post('mentor-assignments')
-  @Roles(RoleName.KEPALA_DIVISI)
-  assignMentor(@Body() dto: MentorAssignmentDto) {
-    return this.projects.assignMentor(dto);
+  @Roles(...PENGURUS_ROLES, RoleName.KEPALA_DIVISI)
+  assignMentor(
+    @Body() dto: MentorAssignmentDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.projects.assignMentor(dto, user.sub);
   }
 
   @Get('mentor-assignments/me')
   myMentors(@CurrentUser() user: JwtPayload) {
     if (!user.memberId) throw new BadRequestException('Member profile required');
     return this.projects.myMentorAssignments(user.memberId);
+  }
+
+  @Post('tasks/reminders/deadlines')
+  @Roles(RoleName.KETUA, RoleName.SEKRETARIS, RoleName.WAKIL_KETUA)
+  deadlineReminders() {
+    return this.projects.sendDeadlineReminders();
   }
 }

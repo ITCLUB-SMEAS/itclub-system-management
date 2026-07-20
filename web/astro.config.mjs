@@ -16,6 +16,15 @@ export default defineConfig({
     resolve: {
       dedupe: ["react", "react-dom"],
     },
+    server: {
+      // Dev: same-origin /api → Nest (HttpOnly cookies)
+      proxy: {
+        "/api": {
+          target: "http://127.0.0.1:3000",
+          changeOrigin: true,
+        },
+      },
+    },
     optimizeDeps: {
       include: [
         "react",
@@ -28,3 +37,4 @@ export default defineConfig({
     },
   },
 });
+
